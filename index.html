@@ -1,0 +1,39 @@
+﻿<!DOCTYPE HTML>
+<html>
+<head>
+    <title>Chess Chaos</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+    <script type="module" src="/src/app.js"></script>
+</head>
+<body>
+    <div class="page">
+        <header class="page-header">
+            <h1>Chess Chaos</h1>
+        </header>
+
+        <section id="game-section" class="game-section">
+            
+            <div id="viewport" class="viewport">
+                <div id="stage" class="stage">
+                    <div id="chess-stage" class="chess-stage">
+                        <div class="board-sprite" aria-hidden="true"></div>
+                        <div id="pieces-layer" class="pieces-layer"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="settings-section" class="settings-section">
+            <div class="section-heading">
+                <h2>Piece Settings</h2>
+            </div>
+            <div id="settings-panel" class="settings-panel"></div>
+            <div class="game-toolbar">
+                <button id="reset-board" type="button">Reset Board</button>
+            </div>
+        </section>
+    </div>
+</body>
+</html>
