@@ -94,6 +94,7 @@ export const initializePieces = () => {
             label: config.label,
             color: config.color,
             image: config.image,
+            initialImage: config.image, // Store initial image for reset
             position: { col: config.col, row: config.row },
             initialPosition: { col: config.col, row: config.row },
             notation: toNotation(config.col, config.row),
@@ -143,8 +144,8 @@ export const capturePiece = (piece) => {
 
 // *** CORE MOVEMENT FUNCTION ***
 // Moves a piece to a new position, handling captures.
-// Returns an object describing what happened, for visual updates and server sync.
-export const movePiece = (slot, targetCol, targetRow, { isFromServer = false } = {}) => {
+// Returns an object describing what happened
+export const movePiece = (slot, targetCol, targetRow) => {
     const piece = state.pieces[slot];
     if (!piece || piece.captured) return null;
 
@@ -169,17 +170,6 @@ export const movePiece = (slot, targetCol, targetRow, { isFromServer = false } =
         capturedPiece,
     };
 
-    // =================================================================
-    // SERVER SYNC: Send move to server (only for local moves)
-    // =================================================================
-    // TODO: Implement server communication
-    // When a local player moves a piece, notify the server so it can:
-    // 1. Update its authoritative board state
-    // 2. Broadcast the move to other clients via Pusher
-    if (!isFromServer) {
-        sendMoveToServer(moveResult);
-    }
-
     return moveResult;
 };
 
@@ -191,66 +181,10 @@ export const resetBoard = () => {
         piece.captured = false;
         piece.position = { ...piece.initialPosition };
         piece.notation = toNotation(piece.position.col, piece.position.row);
+        piece.image = piece.initialImage; // Reset image to initial state
         resetPieces.push(piece);
     });
     return resetPieces; // Return all pieces so app.js can update visuals
 };
 
-// =============================================================================
-// SERVER COMMUNICATION STUBS
-// =============================================================================
-// These functions handle synchronization with the server.
-// The server maintains the authoritative board state and broadcasts moves via Pusher.
 
-// Sends a local move to the server
-// TODO: Implement actual HTTP request to server
-function sendMoveToServer(moveResult) {
-    // TODO: Send move to server
-    // Example payload:
-    // {
-    //     slot: moveResult.piece.slot,
-    //     from: { col: moveResult.from.col, row: moveResult.from.row },
-    //     to: { col: moveResult.to.col, row: moveResult.to.row },
-    // }
-    console.log('[SERVER STUB] Would send move to server:', {
-        slot: moveResult.piece.slot,
-        from: moveResult.from,
-        to: moveResult.to,
-    });
-}
-
-// Called when receiving a move from another client via Pusher
-// This updates local state to match the server's authoritative state
-export const applyServerMove = (moveData) => {
-    // TODO: Implement when adding Pusher
-    // moveData expected format:
-    // {
-    //     slot: '5',           // Which piece moved
-    //     from: { col, row },  // Previous position
-    //     to: { col, row },    // New position
-    // }
-    console.log('[SERVER STUB] Would apply server move:', moveData);
-
-    // Apply the move locally (isFromServer=true prevents re-sending to server)
-    const result = movePiece(moveData.slot, moveData.to.col, moveData.to.row, { isFromServer: true });
-    return result;
-};
-
-// Called to sync full board state from server (safety measure)
-// Use this on initial load or if states get out of sync
-export const applyFullBoardState = (boardState) => {
-    // TODO: Implement when adding Pusher
-    // boardState expected format:
-    // {
-    //     pieces: {
-    //         '1': { col: 0, row: 7, captured: false },
-    //         '2': { col: 1, row: 7, captured: false },
-    //         ... etc
-    //     }
-    // }
-    console.log('[SERVER STUB] Would apply full board state:', boardState);
-
-    // TODO: Loop through boardState.pieces and update each piece's position/captured status
-    // Return list of pieces that changed so app.js can update visuals
-    return [];
-};

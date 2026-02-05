@@ -4,17 +4,20 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "cross-env NODE_OPTIONS=\"--no-warnings --no-deprecation\" vite",
     "build": "vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "cross-env": "^10.1.0",
     "typescript": "~5.9.3",
     "vite": "^7.2.4"
   },
   "dependencies": {
-    "@upstash/redis": "^1.36.1",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.36.2",
     "pusher": "^5.3.2",
-    "pusher-js": "^8.4.0"
+    "pusher-js": "^8.4.0",
+    "vercel": "^50.10.2"
   }
 }
