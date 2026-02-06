@@ -1,26 +1,26 @@
 /* =============================================================================
-   CSS VARIABLES - Chess.com Inspired Theme
+   CSS VARIABLES - Infinite Craft Inspired Theme
    ============================================================================= */
 
 :root {
-    --bg: #312e2b;
-    --bg-darker: #272522;
-    --bg-lighter: #3a3633;
-    --panel-bg: #21201d;
-    --card-bg: #262522;
-    --accent: #81b64c;
-    --accent-strong: #a3d160;
-    --accent-hover: #9aca47;
-    --accent-dim: #629924;
-    --border: #3d3a37;
-    --border-light: #4a4643;
-    --border-glow: rgba(129, 182, 76, 0.3);
-    --ink: #f0f0f0;
-    --ink-secondary: #c4c4c3;
-    --muted: #9e9e9c;
-    --title-card-bg: #262522;
-    --danger: #c33;
-    --gold: #e5a829;
+    --bg: #0a0a0c;
+    --bg-darker: #050507;
+    --bg-lighter: #111114;
+    --panel-bg: #0d0d10;
+    --card-bg: #131316;
+    --accent: #7c9cff;
+    --accent-strong: #a0b8ff;
+    --accent-hover: #8eaaff;
+    --accent-dim: #5a7acc;
+    --border: #2a2a30;
+    --border-light: #3a3a42;
+    --border-glow: rgba(124, 156, 255, 0.3);
+    --ink: #ffffff;
+    --ink-secondary: #b8b8bc;
+    --muted: #707078;
+    --title-card-bg: #131316;
+    --danger: #ff6b6b;
+    --gold: #ffd666;
 }
 
 /* =============================================================================
@@ -38,10 +38,13 @@
 body {
     margin: 0;
     background: 
-        radial-gradient(ellipse 80% 50% at 50% 0%, rgba(129, 182, 76, 0.08) 0%, transparent 50%),
-        radial-gradient(ellipse 60% 40% at 80% 20%, rgba(98, 153, 36, 0.05) 0%, transparent 40%),
-        radial-gradient(ellipse 70% 50% at 20% 80%, rgba(0, 0, 0, 0.3) 0%, transparent 50%),
-        linear-gradient(180deg, #3a3633 0%, #312e2b 15%, #272522 85%, #1e1c1a 100%);
+        radial-gradient(ellipse 80% 50% at 50% 0%, rgba(124, 156, 255, 0.04) 0%, transparent 45%),
+        radial-gradient(ellipse 50% 35% at 85% 15%, rgba(100, 130, 220, 0.03) 0%, transparent 40%),
+        radial-gradient(ellipse 40% 30% at 10% 70%, rgba(80, 100, 180, 0.02) 0%, transparent 35%),
+        radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.008) 0%, transparent 1%),
+        radial-gradient(circle at 80% 60%, rgba(255, 255, 255, 0.006) 0%, transparent 1%),
+        radial-gradient(circle at 60% 80%, rgba(255, 255, 255, 0.007) 0%, transparent 1%),
+        linear-gradient(180deg, #0f0f12 0%, #0a0a0c 30%, #050507 100%);
     min-height: 100vh;
 }
 
@@ -84,30 +87,30 @@ body {
     line-height: 1.15;
     text-align: center;
     
-    border-radius: 6px;
+    border-radius: 8px;
     box-shadow: 
-        0 4px 12px rgba(0, 0, 0, 0.4),
-        0 0 20px rgba(129, 182, 76, 0.08),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        0 4px 20px rgba(0, 0, 0, 0.5),
+        0 0 30px rgba(124, 156, 255, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .title-card.white-turn {
     background: 
-        linear-gradient(135deg, rgba(255,255,255,0.4) 0%, transparent 50%),
-        linear-gradient(180deg, #ffffff 0%, #f0f0f0 30%, #e0e0e0 70%, #d5d5d5 100%);
-    color: #1a1a1a;
-    border: 2px solid #fff;
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+        linear-gradient(135deg, rgba(255,255,255,0.3) 0%, transparent 50%),
+        linear-gradient(180deg, #ffffff 0%, #f4f4f6 30%, #e8e8ec 70%, #dcdce2 100%);
+    color: #0a0a0c;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 .title-card.black-turn {
     background: 
-        linear-gradient(135deg, rgba(255,255,255,0.08) 0%, transparent 50%),
-        linear-gradient(180deg, #4a4744 0%, #3d3a37 30%, #2d2b28 70%, #222120 100%);
+        linear-gradient(135deg, rgba(255,255,255,0.06) 0%, transparent 50%),
+        linear-gradient(180deg, #1e1e22 0%, #161619 30%, #101013 70%, #0a0a0c 100%);
     color: var(--ink);
-    border: 2px solid #4a4643;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--border-light);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
 }
 
 /* =============================================================================
@@ -119,11 +122,8 @@ body {
     width: 90vw;
     height: 77vh;
     background: 
-        radial-gradient(ellipse 100% 80% at 50% 0%, rgba(129, 182, 76, 0.04) 0%, transparent 40%),
-        radial-gradient(ellipse 80% 60% at 100% 100%, rgba(0, 0, 0, 0.25) 0%, transparent 50%),
-        radial-gradient(ellipse 60% 50% at 0% 100%, rgba(0, 0, 0, 0.2) 0%, transparent 40%),
-        linear-gradient(180deg, #2d2a28 0%, #252320 40%, #1f1d1b 80%, #1a1917 100%);
-    border: 2px solid var(--border);
+        linear-gradient(180deg, #19191e 0%, #1d1d21 40%, #2a2a2f 80%, #222229 100%);
+    border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
     cursor: grab;
@@ -132,9 +132,10 @@ body {
     -webkit-user-select: none;
     -webkit-user-drag: none;
     box-shadow: 
-        0 8px 32px rgba(0, 0, 0, 0.5),
-        inset 0 1px 0 rgba(255, 255, 255, 0.05),
-        inset 0 -2px 10px rgba(0, 0, 0, 0.3);
+        0 8px 40px rgba(0, 0, 0, 0.6),
+        0 0 60px rgba(124, 156, 255, 0.03),
+        inset 0 1px 0 rgba(255, 255, 255, 0.03),
+        inset 0 -2px 15px rgba(0, 0, 0, 0.4);
     
 }
 
@@ -182,16 +183,16 @@ body {
     padding: 12px 8px;
 
     /* Will swap to red border color during New Rules state */
-    border: 3px solid var(--accent);
-    border-radius: 6px;
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
     box-shadow: 
-        0 4px 16px rgba(0, 0, 0, 0.4),
-        0 0 20px rgba(129, 182, 76, 0.15),
-        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        0 4px 20px rgba(0, 0, 0, 0.5),
+        0 0 25px rgba(124, 156, 255, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
     background: 
-        radial-gradient(ellipse 120% 80% at 50% -20%, rgba(129, 182, 76, 0.12) 0%, transparent 50%),
-        linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 50%),
-        linear-gradient(180deg, #2f2d2a 0%, #262422 35%, #1f1d1b 75%, #1a1816 100%);
+        radial-gradient(ellipse 120% 80% at 50% -20%, rgba(124, 156, 255, 0.08) 0%, transparent 50%),
+        linear-gradient(135deg, rgba(255,255,255,0.03) 0%, transparent 50%),
+        linear-gradient(180deg, #161619 0%, #111114 35%, #0c0c0f 75%, #080809 100%);
 
     flex: 1 1 0;
     min-width: 100px;
@@ -203,14 +204,14 @@ body {
 .current-rule-card:hover {
     transform: translateY(-2px);
     box-shadow: 
-        0 6px 20px rgba(0, 0, 0, 0.5),
-        0 0 30px rgba(129, 182, 76, 0.25),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    border-color: var(--accent-strong);
+        0 6px 25px rgba(0, 0, 0, 0.6),
+        0 0 35px rgba(124, 156, 255, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    border-color: var(--accent);
     background: 
-        radial-gradient(ellipse 120% 80% at 50% -20%, rgba(129, 182, 76, 0.18) 0%, transparent 50%),
-        linear-gradient(135deg, rgba(255,255,255,0.06) 0%, transparent 50%),
-        linear-gradient(180deg, #353330 0%, #2a2826 35%, #222120 75%, #1c1a18 100%);
+        radial-gradient(ellipse 120% 80% at 50% -20%, rgba(124, 156, 255, 0.15) 0%, transparent 50%),
+        linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 50%),
+        linear-gradient(180deg, #1a1a1e 0%, #141417 35%, #0e0e11 75%, #0a0a0c 100%);
 }
 
 .current-rule-card p {
@@ -285,12 +286,12 @@ body {
     content: '';
     position: absolute;
     inset: 0;
-    border: 3px solid var(--accent-strong);
+    border: 2px solid var(--accent-strong);
     border-radius: 12px;
     pointer-events: none;
     box-shadow: 
-        0 0 15px rgba(129, 182, 76, 0.6),
-        inset 0 0 10px rgba(129, 182, 76, 0.3);
+        0 0 20px rgba(124, 156, 255, 0.5),
+        inset 0 0 12px rgba(124, 156, 255, 0.25);
 }
 
 .piece.captured {
@@ -309,30 +310,30 @@ body {
 }
 
 .game-toolbar button {
-    background: linear-gradient(180deg, var(--card-bg) 0%, var(--bg-darker) 100%);
-    border: 2px solid var(--border);
-    border-radius: 6px;
+    background: linear-gradient(180deg, #161619 0%, #0c0c0f 100%);
+    border: 1px solid var(--border);
+    border-radius: 8px;
     padding: 8px 14px;
     font-size: 13px;
-    color: var(--accent);
+    color: var(--ink-secondary);
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
 }
 
 .game-toolbar button:hover {
-    background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dim) 100%);
-    border-color: var(--accent-strong);
-    color: #fff;
+    background: linear-gradient(180deg, #1e1e24 0%, #141418 100%);
+    border-color: var(--accent);
+    color: var(--ink);
     box-shadow: 
-        0 4px 12px rgba(0, 0, 0, 0.4),
-        0 0 15px rgba(129, 182, 76, 0.3);
+        0 4px 15px rgba(0, 0, 0, 0.5),
+        0 0 20px rgba(124, 156, 255, 0.15);
     transform: translateY(-1px);
 }
 
 .game-toolbar button:active {
     transform: translateY(0);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
 /* =============================================================================
@@ -342,9 +343,9 @@ body {
 .settings-section {
     margin-top: 20px;
     background: 
-        radial-gradient(ellipse 80% 50% at 50% 0%, rgba(129, 182, 76, 0.03) 0%, transparent 40%),
-        linear-gradient(180deg, var(--panel-bg) 0%, rgba(33, 32, 29, 0.95) 100%);
-    border: 2px solid var(--border);
+        radial-gradient(ellipse 80% 50% at 50% 0%, rgba(124, 156, 255, 0.02) 0%, transparent 40%),
+        linear-gradient(180deg, #111114 0%, #0c0c0f 50%, #080809 100%);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 16px 20px;
     display: flex;
@@ -353,7 +354,7 @@ body {
     gap: 16px;
     width:90vw;
     box-shadow: 
-        0 8px 32px rgba(0, 0, 0, 0.4),
+        0 8px 40px rgba(0, 0, 0, 0.5),
         inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
@@ -384,8 +385,8 @@ body {
    ============================================================================= */
 
 .piece-controls {
-    background: linear-gradient(180deg, var(--card-bg) 0%, var(--bg-darker) 100%);
-    border: 2px solid var(--border);
+    background: linear-gradient(180deg, #141417 0%, #0a0a0c 100%);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 6px;
     display: flex;
@@ -394,14 +395,14 @@ body {
     align-items: center;
     width: 100%;
     transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 }
 
 .piece-controls:hover {
     border-color: var(--border-light);
     box-shadow: 
-        0 4px 12px rgba(0, 0, 0, 0.3),
-        0 0 10px rgba(129, 182, 76, 0.08);
+        0 4px 15px rgba(0, 0, 0, 0.4),
+        0 0 15px rgba(124, 156, 255, 0.05);
 }
 
 .piece-controls header {
@@ -434,9 +435,9 @@ body {
 }
 
 .piece-controls select {
-    background: linear-gradient(180deg, #2a2825 0%, #1e1d1b 100%);
+    background: linear-gradient(180deg, #18181c 0%, #0e0e11 100%);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: 6px;
     padding: 4px 6px;
     font-size: 12px;
     width: 100%;
@@ -446,22 +447,22 @@ body {
 }
 
 .piece-controls select:hover {
-    border-color: var(--accent-dim);
+    border-color: var(--border-light);
 }
 
 .piece-controls select:focus {
     outline: none;
     border-color: var(--accent);
-    box-shadow: 0 0 8px rgba(129, 182, 76, 0.3);
+    box-shadow: 0 0 10px rgba(124, 156, 255, 0.2);
 }
 
 .position-tag {
     font-size: 12px;
     color: var(--ink-secondary);
     white-space: nowrap;
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(0, 0, 0, 0.3);
     padding: 2px 6px;
-    border-radius: 3px;
+    border-radius: 4px;
 }
 
 /* =============================================================================
@@ -490,7 +491,7 @@ body {
    ============================================================================= */
 
 ::selection {
-    background: rgba(129, 182, 76, 0.4);
+    background: rgba(124, 156, 255, 0.35);
     color: #fff;
 }
 
