@@ -1,10 +1,4 @@
 // =============================================================================
-// GAME STATE & LOGIC
-// =============================================================================
-// This module contains all chess game state and logic, separate from rendering.
-// It handles piece positions, movement, captures, and server synchronization.
-
-// =============================================================================
 // CONSTANTS
 // =============================================================================
 
@@ -85,6 +79,8 @@ export const state = {
     selectedSlot: null,
 };
 
+// This generates a simplified version of the state,
+//  where it only includes the info that the server cares about
 export const getSimpleBoardState = () => {
     /*
     Creates a new state of the board with following structure:

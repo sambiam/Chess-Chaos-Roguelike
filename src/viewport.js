@@ -91,6 +91,24 @@ export function createZoomPan(viewport, stage, { zoomMultiplier = 0.7, contentSi
         apply();
     };
 
+    // Fits content to viewport and centers it (guarantees entire content is visible)
+    const fitAndCenterContent = (contentWidth = contentSize, contentHeight = contentSize) => {
+        const rect = viewport.getBoundingClientRect();
+        // Calculate scale needed to fit content within viewport (with small padding)
+        const padding = 20; // Add some breathing room
+        const scaleToFitWidth = (rect.width - padding) / contentWidth;
+        const scaleToFitHeight = (rect.height - padding) / contentHeight;
+        // Use the smaller scale to ensure content fits in both dimensions
+        const fitScale = Math.min(scaleToFitWidth, scaleToFitHeight, 1); // Don't zoom in past 100%
+        const clampedScale = clamp(fitScale, MIN_SCALE, MAX_SCALE);
+        
+        // Set the scale and center the content
+        scale = clampedScale;
+        tx = Math.floor((rect.width - contentWidth * scale) / 2);
+        ty = Math.floor((rect.height - contentHeight * scale) / 2);
+        apply();
+    };
+
     // Resets interaction state (called when board resets)
     const resetInteractionState = () => { hasInteracted = false; };
 
@@ -157,16 +175,16 @@ export function createZoomPan(viewport, stage, { zoomMultiplier = 0.7, contentSi
 
     viewport.addEventListener('lostpointercapture', stopDragging);
 
-    // Double-click: reset to default zoom and center
+    // Double-click: fit entire board to viewport and center
     viewport.addEventListener('dblclick', () => {
-        setTransform({ scale: 1 });
-        centerContent();
+        fitAndCenterContent();
     });
 
     return { 
         setTransform, 
         screenToWorld, 
         centerContent,
+        fitAndCenterContent,
         resetInteractionState,
         hasInteracted: getHasInteracted,
         toGridSquare

@@ -11,6 +11,7 @@
     --border: #2c3141;
     --ink: #f2f5ff;
     --muted: #a8b6cd;
+    --title-card-bg: #252525;
 }
 
 /* =============================================================================
@@ -37,11 +38,12 @@ body {
 .page {
     display: flex;
     flex-direction: column;
-    gap: 24px;
-    padding: 24px;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
     padding-left: 5vw;
-    /* width: 1920px; */
-    width: 100vw;
+    padding-right: 5vw;
     margin: 0;
 }
 
@@ -50,12 +52,135 @@ body {
     justify-content: center;
 }
 
-.page-header h1 {
-    margin: 0;
-    font-size: 32px;
-    font-weight: 600;
+
+/* =============================================================================
+   TITLE
+   ============================================================================= */
+
+.title-card {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: center;
+    min-width: 25vw;
+    
+    font-size: clamp(1rem, 3vw, 10vw);
+    font-weight: 800;
+    font-weight: 700;
+    line-height: 1.15;
+    text-align: center;
+    
+    border-radius: 3px;
+    box-shadow: 3px 3px black;
 }
 
+.title-card.white-turn {
+    background-color: var(--ink);
+    color: #111111;
+}
+
+.title-card.black-turn {
+    background-color: var(--title-card-bg);
+    color: var(--ink);
+}
+
+/* =============================================================================
+   VIEWPORT & STAGE (zoom/pan container)
+   ============================================================================= */
+
+.viewport {
+    position: relative;
+    width: 90vw;
+    height: 77vh;
+    background: #0d1018;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: grab;
+    /* Prevent native drag/select behavior that interferes with pan/zoom */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+    box-shadow: 3px 3px black;
+    
+}
+
+.viewport * {
+    /* Prevent all children from triggering native drag */
+    -webkit-user-drag: none;
+    user-select: none;
+}
+
+.viewport.dragging {
+    cursor: grabbing;
+}
+
+.stage {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+/* =============================================================================
+   CURRENT RULES
+   ============================================================================= */
+
+.current-rules-section {
+    display:flex;
+    flex-direction: row;
+    gap:10px;
+    justify-content: center;
+    align-content: center;
+    width: 90vw;
+    gap: 2%;
+    padding-left: 5vw;
+    padding-right: 5vw;
+    margin-top: 5px;
+}
+
+.current-rule-card {
+    display:flex;
+    flex-direction: column;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-content: center;
+    padding:5px;
+
+    /* Will swap to red border color (#400000) during New Rules state */
+    border: 3px solid #04b300;
+    border-radius: 2px;
+    box-shadow: 3px 3px black;
+    background-color: #07070a;
+
+    flex: 1 1 0;
+    min-width: 100px;
+    max-width: 550px;
+    min-height: 80px;
+}
+
+.current-rule-card p {
+    margin:0;
+    font-style: italic;
+}
+
+.current-rule-description {
+    color: var(--ink);
+    font-size: 1.4em;
+    font-weight: 600;
+    margin:0;
+    text-align: center;
+    line-height: 1.1;
+}
+
+.current-rule-duration {
+    color: var(--muted);
+    text-align: center;
+    font-size: 1.2em;
+    font-weight: 300;
+    
+    margin:0;
+}
 
 /* =============================================================================
    CHESS BOARD
@@ -142,14 +267,16 @@ body {
    ============================================================================= */
 
 .settings-section {
+    margin-top: 20px;
     background: var(--panel-bg);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 16px 20px;
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 16px;
-    width:100vw;
+    width:90vw;
 }
 
 .section-heading {
@@ -167,13 +294,10 @@ body {
 
 .settings-panel {
     display: grid;
-    gap: 12px;
-    grid-template-columns: repeat(8, 11%);
-    /* min-width: 100vw; */
-    /* grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); */
-    /* max-height: 300px;
-    overflow-y: auto; */
+    gap: 8px;
+    grid-template-columns: repeat(8, 1fr);
     padding-right: 8px;
+    width: 100%;
 }
 
 /* =============================================================================
@@ -184,85 +308,55 @@ body {
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 8px 10px;
+    padding: 3px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 4px;
+    align-items: center;
+    width: 100%;
 }
 
 .piece-controls header {
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
     align-items: center;
-    font-size: 11px;
+    gap: 2px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--accent);
+    white-space: nowrap;
+    width: 100%;
 }
 
 .piece-controls .control-row {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 2px;
     align-items: center;
+    width: 100%;
 }
 
 .piece-controls label {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--muted);
-    min-width: 35px;
+    white-space: nowrap;
+    text-align: center;
+    width: 100%;
 }
 
 .piece-controls select {
     background: #141721;
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 6px 10px;
-    font-size: 10px;
-    flex: 1;
+    border-radius: 6px;
+    padding: 4px 6px;
+    font-size: 12px;
+    width: 100%;
 }
 
 .position-tag {
     font-size: 12px;
     color: var(--muted);
-}
-
-/* =============================================================================
-   VIEWPORT & STAGE (zoom/pan container)
-   ============================================================================= */
-
-.viewport {
-    position: relative;
-    /* width: 1920px;
-    height: 1080px; */
-    width: 90vw;
-    height: 90vh;
-    background: #0d1018;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
-    cursor: grab;
-    /* Prevent native drag/select behavior that interferes with pan/zoom */
-    user-select: none;
-    -webkit-user-select: none;
-    -webkit-user-drag: none;
-}
-
-.viewport * {
-    /* Prevent all children from triggering native drag */
-    -webkit-user-drag: none;
-    user-select: none;
-}
-
-.viewport.dragging {
-    cursor: grabbing;
-}
-
-.stage {
-    position: absolute;
-    left: 0;
-    top: 0;
-    transform-origin: 0 0;
-    will-change: transform;
+    white-space: nowrap;
 }
 
 /* =============================================================================

@@ -1,4 +1,4 @@
-﻿import './style.css';
+import './style.css';
 import Pusher from 'pusher-js';
 import { createZoomPan } from './viewport.js';
 import {
@@ -283,8 +283,7 @@ function initializePusher() {
 // Reset button
 resetButton.addEventListener('click', async () => {
     handleResetBoard();
-    zoomPan.setTransform({ scale: 1 });
-    zoomPan.centerContent(BOARD_SIZE, BOARD_SIZE);
+    zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);
     zoomPan.resetInteractionState();
 
     // Send a board update event to server
@@ -309,7 +308,7 @@ settingsPanel.addEventListener('change', async event => {
 // Re-center board on window resize if user hasn't manually panned/zoomed
 window.addEventListener('resize', () => {
     if (!zoomPan.hasInteracted()) {
-        zoomPan.centerContent(BOARD_SIZE, BOARD_SIZE);
+        zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);
     }
 });
 
@@ -473,7 +472,6 @@ const syncBoardWithServer = (newState) => {
         if (currentPiece.captured !== newPiece.captured) {
             currentPiece.captured = newPiece.captured;
             updatePieceCaptureState(currentPiece);
-            playCaptureSounds();
         }
     }
 };
@@ -485,8 +483,7 @@ const syncBoardWithServer = (newState) => {
 initializePieces();
 renderSettingsPanel();
 renderPieces();
-zoomPan.setTransform({ scale: 1 });
-zoomPan.centerContent(BOARD_SIZE, BOARD_SIZE);
+zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);
 
 // Pull the state of the board from the Redis DB, update our board state appropriately
 await pullServerBoardState();
@@ -498,13 +495,11 @@ initializePusher();
 Temp tests for future rule design changes
 const viewportShrink = function() {
     document.getElementById('viewport').style.width = '60vw';
-    zoomPan.setTransform({ scale: 1 });
-    zoomPan.centerContent(BOARD_SIZE, BOARD_SIZE);
+    zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);
 }
 const viewportExpand = function() {
     document.getElementById('viewport').style.width = '90vw';
-    zoomPan.setTransform({ scale: 1 });
-    zoomPan.centerContent(BOARD_SIZE, BOARD_SIZE);
+    zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);
 }
 setTimeout(viewportShrink, 3000);
 setTimeout(viewportExpand, 6000);
