@@ -3,15 +3,25 @@ import Pusher from 'pusher-js';
 import { createZoomPan } from './viewport.js';
 import {
     state,
+    getSimpleBoardState,
     SQUARE_SIZE,
+    pieceImageOptions,
     initializePieces,
     getPieceAt,
     selectPiece,
     deselectPiece,
     movePiece,
     resetBoard,
-} from './game.js';
-
+} from './board-state.js';
+import {
+    apiGet,
+    apiPost,
+    getUserId,
+    playCaptureSounds,
+} from './utils.js';
+import {
+    rules,
+} from './rules.js';
 
 // =============================================================================
 // CONSTANTS
@@ -29,47 +39,6 @@ const ZOOM_SCROLL_MULTIPLIER = 0.7;  // Lower = slower zoom, higher = faster
 let clientSecret = '';
 
 // =============================================================================
-// ASSET LISTS
-// =============================================================================
-
-// Available piece images for the dropdown selectors
-const pieceImageOptions = [
-    'White King 1.png', 'White Queen 1.png',
-    'White Rook 1.png', 'White Rook 2.png',
-    'White Bishop 1.png', 'White Bishop 2.png',
-    'White Knight 1.png', 'White Knight 2.png',
-    'White Pawn 1.png', 'White Pawn 2.png', 'White Pawn 3.png', 'White Pawn 4.png',
-    'White Pawn 5.png', 'White Pawn 6.png', 'White Pawn 7.png', 'White Pawn 8.png',
-    'Black King 1.png', 'Black Queen 1.png',
-    'Black Rook 1.png', 'Black Rook 2.png',
-    'Black Bishop 1.png', 'Black Bishop 2.png',
-    'Black Knight 1.png', 'Black Knight 2.png',
-    'Black Pawn 1.png', 'Black Pawn 2.png', 'Black Pawn 3.png', 'Black Pawn 4.png',
-    'Black Pawn 5.png', 'Black Pawn 6.png', 'Black Pawn 7.png', 'Black Pawn 8.png'
-];
-
-// Sound effects played when a piece captures another
-const hitSoundFiles = [
-    'hit sound 1.wav', 'hit sound 2.wav', 'hit sound 3.wav', 'hit sound 4.wav'
-].map(name => `/sounds/${encodeURIComponent(name)}`);
-
-const audienceSoundFiles = [
-    'audience sound 1.wav', 'audience sound 2.wav', 'audience sound 3.wav', 'audience sound 4.wav'
-].map(name => `/sounds/${encodeURIComponent(name)}`);
-
-// =============================================================================
-// VIEW STATE
-// =============================================================================
-// This defines the starting state of all 32 chess pieces.
-// - slot: unique identifier for each piece (1-32)
-// - col/row: board position (0-7), where row 0 is top (black's back rank)
-// - col 0 is leftmost (A file), col 7 is rightmost (H file)
-
-const viewState = {
-    hasInteractedWithView: false,
-};
-
-// =============================================================================
 // DOM REFERENCES
 // =============================================================================
 
@@ -78,49 +47,6 @@ const piecesLayer = document.getElementById('pieces-layer');
 const viewport = document.getElementById('viewport');
 const stage = document.getElementById('stage');
 const resetButton = document.getElementById('reset-board');
-
-// =============================================================================
-// UTILITY FUNCTIONS
-// =============================================================================
-
-const randomItem = list => list[Math.floor(Math.random() * list.length)];
-
-// =============================================================================
-// API HELPER FUNCTIONS
-// =============================================================================
-
-// HTTP GET helper function
-async function apiGet(endpoint, params = {}) {
-    const queryString = new URLSearchParams(params).toString(); // Build query string from params object,  e.g., { playerId: "mario", limit: 10 } becomes "?playerId=mario&limit=10"
-    const url = queryString ? `${endpoint}?${queryString}` : endpoint;    
-    const response = await fetch(url); // Send the HTTP request
-    const data = await response.json();
-    return data;
-}
-
-// HTTP POST helper function
-async function apiPost(endpoint, body = {}) {
-    const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-        'Content-Type': 'application/json', // Tell the server we're sending JSON
-        },
-        body: JSON.stringify(body), // Convert JS object to JSON string
-    });
-    const data = await response.json();
-    return data;
-    // return response;
-}
-
-// Returns this browser's unique ID (or generates a new one if they don't have it already)
-function getUserId() {
-    let id = localStorage.getItem('userId');   
-    if (!id) {
-        id = crypto.randomUUID();
-        localStorage.setItem('userId', id);
-    }
-    return id;
-}
 
 // =============================================================================
 // PIECE VISUAL UPDATES
@@ -163,19 +89,7 @@ const updatePieceSelection = (piece, isSelected) => {
 };
 
 // =============================================================================
-// SOUND EFFECTS
-// =============================================================================
-
-const playCaptureSounds = () => {
-    [randomItem(hitSoundFiles), randomItem(audienceSoundFiles)].forEach(url => {
-        const sfx = new Audio(url);
-        sfx.volume = 0.8;
-        sfx.play().catch(() => {});
-    });
-};
-
-// =============================================================================
-// RENDERING - SETTINGS PANEL
+// RENDERING SETTINGS AND PIECES
 // =============================================================================
 
 const renderSettingsPanel = () => {
@@ -240,10 +154,6 @@ const renderSettingsPanel = () => {
     settingsPanel.appendChild(fragment);
 };
 
-// =============================================================================
-// RENDERING - CHESS PIECES
-// =============================================================================
-
 const renderPieces = () => {
     const fragment = document.createDocumentFragment();
     
@@ -267,24 +177,60 @@ const renderPieces = () => {
 };
 
 // =============================================================================
+// BOARD STATE HELPERS
+// =============================================================================
+
+// Handles selecting a piece (updates game state and visuals)
+const handleSelectPiece = (slot) => {
+    // Deselect current piece first
+    const previousSlot = state.selectedSlot;
+    if (previousSlot) {
+        updatePieceSelection(state.pieces[previousSlot], false);
+    }
+    
+    // Select new piece
+    const piece = selectPiece(slot);
+    if (piece) {
+        updatePieceSelection(piece, true);
+    }
+};
+
+// Handles deselecting the current piece
+const handleDeselectPiece = () => {
+    const previousSlot = state.selectedSlot;
+    if (previousSlot) {
+        updatePieceSelection(state.pieces[previousSlot], false);
+    }
+    deselectPiece();
+};
+
+// Handles resetting the board
+const handleResetBoard = () => {
+    handleDeselectPiece();
+    const pieces = resetBoard();
+    pieces.forEach(piece => {
+        updatePiecePosition(piece);
+        updatePieceCaptureState(piece);
+        updatePieceNotation(piece);
+        updatePieceImage(piece); // Reset visual image
+        if (piece.imageSelect) {
+            piece.imageSelect.value = piece.image; // Reset dropdown to initial image
+        }
+    });
+};
+
+// =============================================================================
 // VIEWPORT SETUP
 // =============================================================================
 
 const zoomPan = createZoomPan(viewport, stage, {
-    onInteract: () => { viewState.hasInteractedWithView = true; },
     zoomMultiplier: ZOOM_SCROLL_MULTIPLIER,
     contentSize: BOARD_SIZE,
 });
 
 // Converts screen click position to board square (col, row)
-const screenToSquare = (clientX, clientY) => {
-    const world = zoomPan.screenToWorld(clientX, clientY);
-    const col = Math.floor(world.x / SQUARE_SIZE);
-    const row = Math.floor(world.y / SQUARE_SIZE);
-    if (col < 0 || col > 7 || row < 0 || row > 7) return null;
-    return { col, row };
-};
-
+const screenToSquare = (clientX, clientY) => 
+    zoomPan.toGridSquare(clientX, clientY, SQUARE_SIZE, 8, 8);
 
 // =============================================================================
 // PUSHER INITIALIZATION
@@ -330,9 +276,79 @@ function initializePusher() {
 	});
 }
 
+// =============================================================================
+// DOM EVENT HANDLERS
+// =============================================================================
+
+// Reset button
+resetButton.addEventListener('click', async () => {
+    handleResetBoard();
+    zoomPan.setTransform({ scale: 1 });
+    zoomPan.centerContent(BOARD_SIZE, BOARD_SIZE);
+    zoomPan.resetInteractionState();
+
+    // Send a board update event to server
+    await apiPost('/api/board-state', {clientSecret: clientSecret, userId: getUserId(), newState: getSimpleBoardState()});
+});
+
+// Settings panel: handle image dropdown changes
+settingsPanel.addEventListener('change', async event => {
+    if (!event.target.classList.contains('image-select')) return;
+    const piece = state.pieces[event.target.dataset.slot];
+    if (piece) {
+        piece.image = event.target.value;
+        updatePieceImage(piece);
+    }
+
+    // Send a board update event to server
+    // TODO - currently, only the image setting is tracked in getSimpleBoardState()
+    //        In future will add more settings and add them to getSimpleBoardState() and syncBoardWithServer()
+    await apiPost('/api/board-state', {clientSecret: clientSecret, userId: getUserId(), newState: getSimpleBoardState()});
+});
+
+// Re-center board on window resize if user hasn't manually panned/zoomed
+window.addEventListener('resize', () => {
+    if (!zoomPan.hasInteracted()) {
+        zoomPan.centerContent(BOARD_SIZE, BOARD_SIZE);
+    }
+});
+
 
 // =============================================================================
-// CORE GAME ACTIONS
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+// =============================================================================
+
+
+
+// =============================================================================
+// HANDLE MOVE ACTIONS
 // =============================================================================
 
 // Right-click: select a piece or move the selected piece
@@ -395,73 +411,6 @@ const handleClientMove = async (slot, targetCol, targetRow) => {
     console.log("Posted new board state to the server", response)
 };
 
-const getSimpleBoardState = () => {
-    /*
-    Creates a new state of the board with following structure:
-    simpleState = {
-        1: {
-            captured: false,
-            image: "White Rook 1.png",
-            position: {
-                "col": 0,
-                "row": 7
-            }
-        },
-        2: {...},
-        3: {...},
-        etc
-    }
-    */
-    const simpleState = {};
-    for (const [slot, piece] of Object.entries(state.pieces)) {
-        simpleState[slot] = {
-            image: piece.image,
-            captured: piece.captured,
-            position: { ...piece.position },
-        };
-    }
-    return simpleState;
-};
-
-// Handles selecting a piece (updates game state and visuals)
-const handleSelectPiece = (slot) => {
-    // Deselect current piece first
-    const previousSlot = state.selectedSlot;
-    if (previousSlot) {
-        updatePieceSelection(state.pieces[previousSlot], false);
-    }
-    
-    // Select new piece
-    const piece = selectPiece(slot);
-    if (piece) {
-        updatePieceSelection(piece, true);
-    }
-};
-
-// Handles deselecting the current piece
-const handleDeselectPiece = () => {
-    const previousSlot = state.selectedSlot;
-    if (previousSlot) {
-        updatePieceSelection(state.pieces[previousSlot], false);
-    }
-    deselectPiece();
-};
-
-// Handles resetting the board
-const handleResetBoard = () => {
-    handleDeselectPiece();
-    const pieces = resetBoard();
-    pieces.forEach(piece => {
-        updatePiecePosition(piece);
-        updatePieceCaptureState(piece);
-        updatePieceNotation(piece);
-        updatePieceImage(piece); // Reset visual image
-        if (piece.imageSelect) {
-            piece.imageSelect.value = piece.image; // Reset dropdown to initial image
-        }
-    });
-};
-
 // =============================================================================
 // SENDING AND RECEIVING SERVER EVENTS
 // =============================================================================
@@ -522,49 +471,12 @@ const syncBoardWithServer = (newState) => {
             updatePieceImage(currentPiece);
         }
         if (currentPiece.captured !== newPiece.captured) {
+            currentPiece.captured = newPiece.captured;
             updatePieceCaptureState(currentPiece);
             playCaptureSounds();
         }
     }
 };
-
-
-// =============================================================================
-// EVENT HANDLERS
-// =============================================================================
-
-// Reset button
-resetButton.addEventListener('click', async () => {
-    handleResetBoard();
-    zoomPan.setTransform({ scale: 1 });
-    zoomPan.centerContent(BOARD_SIZE, BOARD_SIZE);
-    viewState.hasInteractedWithView = false;
-
-    // Send a board update event to server
-    await apiPost('/api/board-state', {clientSecret: clientSecret, userId: getUserId(), newState: getSimpleBoardState()});
-});
-
-// Settings panel: handle image dropdown changes
-settingsPanel.addEventListener('change', async event => {
-    if (!event.target.classList.contains('image-select')) return;
-    const piece = state.pieces[event.target.dataset.slot];
-    if (piece) {
-        piece.image = event.target.value;
-        updatePieceImage(piece);
-    }
-
-    // Send a board update event to server
-    // TODO - currently, only the image setting is tracked in getSimpleBoardState()
-    //        In future will add more settings and add them to getSimpleBoardState() and syncBoardWithServer()
-    await apiPost('/api/board-state', {clientSecret: clientSecret, userId: getUserId(), newState: getSimpleBoardState()});
-});
-
-// Re-center board on window resize if user hasn't manually panned/zoomed
-window.addEventListener('resize', () => {
-    if (!viewState.hasInteractedWithView) {
-        zoomPan.centerContent(BOARD_SIZE, BOARD_SIZE);
-    }
-});
 
 // =============================================================================
 // INITIALIZATION
@@ -581,3 +493,21 @@ await pullServerBoardState();
 
 // Initialize server connection (when implemented)
 initializePusher();
+
+/*
+Temp tests for future rule design changes
+const viewportShrink = function() {
+    document.getElementById('viewport').style.width = '60vw';
+    zoomPan.setTransform({ scale: 1 });
+    zoomPan.centerContent(BOARD_SIZE, BOARD_SIZE);
+}
+const viewportExpand = function() {
+    document.getElementById('viewport').style.width = '90vw';
+    zoomPan.setTransform({ scale: 1 });
+    zoomPan.centerContent(BOARD_SIZE, BOARD_SIZE);
+}
+setTimeout(viewportShrink, 3000);
+setTimeout(viewportExpand, 6000);
+setTimeout(viewportShrink, 9000);
+setTimeout(viewportExpand, 12000);
+*/

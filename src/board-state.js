@@ -10,6 +10,22 @@
 
 export const SQUARE_SIZE = 100;  // Each square is 100x100 pixels
 
+// Available piece images for the dropdown selectors
+export const pieceImageOptions = [
+    'White King 1.png', 'White Queen 1.png',
+    'White Rook 1.png', 'White Rook 2.png',
+    'White Bishop 1.png', 'White Bishop 2.png',
+    'White Knight 1.png', 'White Knight 2.png',
+    'White Pawn 1.png', 'White Pawn 2.png', 'White Pawn 3.png', 'White Pawn 4.png',
+    'White Pawn 5.png', 'White Pawn 6.png', 'White Pawn 7.png', 'White Pawn 8.png',
+    'Black King 1.png', 'Black Queen 1.png',
+    'Black Rook 1.png', 'Black Rook 2.png',
+    'Black Bishop 1.png', 'Black Bishop 2.png',
+    'Black Knight 1.png', 'Black Knight 2.png',
+    'Black Pawn 1.png', 'Black Pawn 2.png', 'Black Pawn 3.png', 'Black Pawn 4.png',
+    'Black Pawn 5.png', 'Black Pawn 6.png', 'Black Pawn 7.png', 'Black Pawn 8.png'
+];
+
 // =============================================================================
 // INITIAL PIECE CONFIGURATION
 // =============================================================================
@@ -68,6 +84,35 @@ export const state = {
     pieces: {},
     selectedSlot: null,
 };
+
+export const getSimpleBoardState = () => {
+    /*
+    Creates a new state of the board with following structure:
+    simpleState = {
+        1: {
+            captured: false,
+            image: "White Rook 1.png",
+            position: {
+                "col": 0,
+                "row": 7
+            }
+        },
+        2: {...},
+        3: {...},
+        etc
+    }
+    */
+    const simpleState = {};
+    for (const [slot, piece] of Object.entries(state.pieces)) {
+        simpleState[slot] = {
+            image: piece.image,
+            captured: piece.captured,
+            position: { ...piece.position },
+        };
+    }
+    return simpleState;
+};
+
 
 // =============================================================================
 // UTILITY FUNCTIONS

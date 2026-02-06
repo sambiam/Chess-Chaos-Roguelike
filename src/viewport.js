@@ -26,7 +26,7 @@
 //   - scale zooms everything in the stage from the top-left corner (0,0)
 //   - Together, these let you pan around and zoom into any part of the board
 
-export function createZoomPan(viewport, stage, { onInteract, zoomMultiplier = 0.7, contentSize = 800 } = {}) {
+export function createZoomPan(viewport, stage, { zoomMultiplier = 0.7, contentSize = 800 } = {}) {
     const MIN_SCALE = 0.4;   // Maximum zoom out (40%)
     const MAX_SCALE = 3.5;   // Maximum zoom in (350%)
     let scale = 1;           // Current zoom level
@@ -35,9 +35,13 @@ export function createZoomPan(viewport, stage, { onInteract, zoomMultiplier = 0.
     let dragging = false;    // Is user currently dragging?
     let lastX = 0;           // Last mouse X position (for drag delta calculation)
     let lastY = 0;           // Last mouse Y position
+    let hasInteracted = false; // Tracks if user has manually panned/zoomed
 
     // Constrains a value between min and max
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+    // Marks that user has interacted with the viewport
+    const markInteraction = () => { hasInteracted = true; };
 
     // CORE FUNCTION: Applies the current transform to the stage element
     // This single line is what makes all zooming and panning visually happen
@@ -61,7 +65,7 @@ export function createZoomPan(viewport, stage, { onInteract, zoomMultiplier = 0.
     // Zooms in/out centered on a specific screen position
     // This keeps the point under the cursor stationary while zooming
     const zoomAround = (sx, sy, factor) => {
-        if (onInteract) onInteract();
+        markInteraction();
         const world = screenToWorld(sx, sy);
         const newScale = clamp(scale * factor, MIN_SCALE, MAX_SCALE);
         // Adjust translation so the world point stays under the cursor
@@ -87,6 +91,22 @@ export function createZoomPan(viewport, stage, { onInteract, zoomMultiplier = 0.
         apply();
     };
 
+    // Resets interaction state (called when board resets)
+    const resetInteractionState = () => { hasInteracted = false; };
+
+    // Checks if user has interacted with viewport
+    const getHasInteracted = () => hasInteracted;
+
+    // Converts screen click position to grid square (col, row)
+    // Generic helper for any grid-based content
+    const toGridSquare = (clientX, clientY, squareSize, gridWidth = 8, gridHeight = 8) => {
+        const world = screenToWorld(clientX, clientY);
+        const col = Math.floor(world.x / squareSize);
+        const row = Math.floor(world.y / squareSize);
+        if (col < 0 || col >= gridWidth || row < 0 || row >= gridHeight) return null;
+        return { col, row };
+    };
+
     // --- EVENT LISTENERS ---
 
     // Prevent native drag behavior (fixes drag interference on images/elements)
@@ -105,7 +125,7 @@ export function createZoomPan(viewport, stage, { onInteract, zoomMultiplier = 0.
     viewport.addEventListener('pointerdown', event => {
         if (event.button !== 0) return;
         event.preventDefault(); // Prevent text selection and native drag initiation
-        if (onInteract) onInteract();
+        markInteraction();
         dragging = true;
         lastX = event.clientX;
         lastY = event.clientY;
@@ -143,5 +163,12 @@ export function createZoomPan(viewport, stage, { onInteract, zoomMultiplier = 0.
         centerContent();
     });
 
-    return { setTransform, screenToWorld, centerContent };
+    return { 
+        setTransform, 
+        screenToWorld, 
+        centerContent,
+        resetInteractionState,
+        hasInteracted: getHasInteracted,
+        toGridSquare
+    };
 }
