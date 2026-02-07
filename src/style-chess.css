@@ -41,6 +41,7 @@ body {
         radial-gradient(ellipse 80% 50% at 50% 0%, rgba(129, 182, 76, 0.08) 0%, transparent 50%),
         radial-gradient(ellipse 60% 40% at 80% 20%, rgba(98, 153, 36, 0.05) 0%, transparent 40%),
         radial-gradient(ellipse 70% 50% at 20% 80%, rgba(0, 0, 0, 0.3) 0%, transparent 50%),
+        repeating-linear-gradient( 135deg, rgba(52, 52, 52, 0.1) 0px, rgba(76, 70, 67, 0.1) 40px, rgba(101, 96, 93, 0.1) 40px, rgba(73, 68, 66, 0.1) 80px),
         linear-gradient(180deg, #3a3633 0%, #312e2b 15%, #272522 85%, #1e1c1a 100%);
     min-height: 100vh;
 }
@@ -185,12 +186,12 @@ body {
     border: 3px solid var(--accent);
     border-radius: 6px;
     box-shadow: 
-        0 4px 16px rgba(0, 0, 0, 0.4),
+        0 4px 12px rgba(37, 123, 47, 0.4),
         0 0 20px rgba(129, 182, 76, 0.15),
         inset 0 1px 0 rgba(255, 255, 255, 0.08);
     background: 
-        radial-gradient(ellipse 120% 80% at 50% -20%, rgba(129, 182, 76, 0.12) 0%, transparent 50%),
-        linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 50%),
+        radial-gradient(ellipse 120% 80% at 50% 40%, rgba(129, 182, 76, 0.12) 0%, transparent 50%),
+        linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 10%),
         linear-gradient(180deg, #2f2d2a 0%, #262422 35%, #1f1d1b 75%, #1a1816 100%);
 
     flex: 1 1 0;
@@ -208,9 +209,9 @@ body {
         inset 0 1px 0 rgba(255, 255, 255, 0.1);
     border-color: var(--accent-strong);
     background: 
-        radial-gradient(ellipse 120% 80% at 50% -20%, rgba(129, 182, 76, 0.18) 0%, transparent 50%),
-        linear-gradient(135deg, rgba(255,255,255,0.06) 0%, transparent 50%),
-        linear-gradient(180deg, #353330 0%, #2a2826 35%, #222120 75%, #1c1a18 100%);
+        radial-gradient(ellipse 120% 80% at 50% 40%, rgba(129, 182, 76, 0.12) 0%, transparent 50%),
+        linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 10%),
+        linear-gradient(180deg, #2f2d2a 0%, #262422 35%, #1f1d1b 75%, #1a1816 100%);
 }
 
 .current-rule-card p {

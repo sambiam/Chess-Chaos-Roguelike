@@ -186,6 +186,7 @@ export const capturePiece = (piece) => {
 // *** CORE MOVEMENT FUNCTION ***
 // Moves a piece to a new position, handling captures.
 // Returns an object describing what happened
+// NOTE THIS DOES NOT JUST UPDATE THE POSITION OF A PIECE, IT HANDLES A BUNCH OF OTHER CONSEQUENCES
 export const movePiece = (slot, targetCol, targetRow) => {
     const piece = state.pieces[slot];
     if (!piece || piece.captured) return null;

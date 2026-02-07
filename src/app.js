@@ -1,4 +1,4 @@
-import './style.css';
+﻿import './style.css';
 import Pusher from 'pusher-js';
 import { createZoomPan } from './viewport.js';
 import {
@@ -12,6 +12,7 @@ import {
     deselectPiece,
     movePiece,
     resetBoard,
+    toNotation
 } from './board-state.js';
 import {
     apiGet,
@@ -459,10 +460,10 @@ const syncBoardWithServer = (newState) => {
         const currentPiece = state.pieces[Number(slot)];
         if (currentPiece.position.row !== newPiece.position.row || currentPiece.position.col !== newPiece.position.col) {
             // The newPiece is in a different position - update our local state
-            const result = movePiece(Number(slot), newPiece.position.col, newPiece.position.row);
-            if (!result) return;
-            updatePiecePosition(currentPiece); // Update visuals
-            updatePieceNotation(currentPiece);
+            currentPiece.position = { col: newPiece.position.col, row: newPiece.position.row };
+            currentPiece.notation = toNotation(newPiece.position.col, newPiece.position.row);
+            updatePiecePosition(currentPiece); // Update this piece's *visual* location
+            updatePieceNotation(currentPiece); // Update this piece's *visual* notation in settings
         }
         if (currentPiece.image !== newPiece.image) {
             currentPiece.image = newPiece.image;
