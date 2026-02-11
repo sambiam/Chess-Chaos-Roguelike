@@ -112,12 +112,24 @@ body {
 }
 
 /* =============================================================================
-   VIEWPORT & STAGE (zoom/pan container)
+   GAME SECTION - VIEWPORT & NEW RULES
    ============================================================================= */
+
+
+.game-section {
+    display:flex;
+    align-items: center;
+    justify-content: center;
+    /* gap:1.5vw; */
+    gap:1.5%;
+    width: 90vw;
+}
 
 .viewport {
     position: relative;
-    width: 90vw;
+    /* width: 90vw; */
+    width: 100%;
+    /* transition: width 300ms ease; */
     height: 77vh;
     background: 
         radial-gradient(ellipse 100% 80% at 50% 0%, rgba(129, 182, 76, 0.04) 0%, transparent 40%),
@@ -139,6 +151,11 @@ body {
     
 }
 
+.viewport.choices-mode {
+    /* width: 60vw; */
+    width: 70%;
+}
+
 .viewport * {
     /* Prevent all children from triggering native drag */
     -webkit-user-drag: none;
@@ -156,6 +173,114 @@ body {
     transform-origin: 0 0;
     will-change: transform;
 }
+
+.new-rules {
+    /* width: 28.5vw; */
+    /* transition: width 300ms ease; */
+    width: 28.5%;
+    height: 77vh;
+    background: 
+        radial-gradient(ellipse 100% 80% at 50% 0%, rgba(129, 182, 76, 0.04) 0%, transparent 40%),
+        radial-gradient(ellipse 80% 60% at 100% 100%, rgba(0, 0, 0, 0.25) 0%, transparent 50%),
+        radial-gradient(ellipse 60% 50% at 0% 100%, rgba(0, 0, 0, 0.2) 0%, transparent 40%),
+        linear-gradient(180deg, #2d2a28 0%, #252320 40%, #1f1d1b 80%, #1a1917 100%);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: grab;
+    /* Prevent native drag/select behavior that interferes with pan/zoom */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+    box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        inset 0 -2px 10px rgba(0, 0, 0, 0.3);
+
+    display:flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 40px;
+    /* padding: 12px; */
+}
+
+.new-rules.hidden {
+    /* width: 0vw; */
+    display: none;
+}
+
+
+.new-rule-card {
+    display:flex;
+    flex-direction: column;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-content: center;
+    padding: 12px 8px;
+
+    /* Will swap to red border color during New Rules state */
+    border: 3px solid #ab0000;
+    border-radius: 6px;
+    box-shadow: 
+        0 4px 12px rgba(123, 37, 37, 0.4),
+        0 0 20px rgba(182, 76, 76, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    background: 
+        radial-gradient(ellipse 120% 80% at 50% 40%, rgba(129, 182, 76, 0.12) 0%, transparent 50%),
+        linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 10%),
+        linear-gradient(180deg, #2f2a2a 0%, #262222 35%, #1f1b1b 75%, #1a1616 100%);
+
+    flex: 1 1 0;
+    min-height: 100px;
+    max-height: 190px;
+    width:70%;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.3s ease;
+}
+
+.new-rule-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 
+        0 6px 20px rgba(0, 0, 0, 0.5),
+        0 0 30px rgba(129, 182, 76, 0.25),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    border-color: var(--accent-strong);
+    background: 
+        radial-gradient(ellipse 120% 80% at 50% 40%, rgba(129, 182, 76, 0.12) 0%, transparent 50%),
+        linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 10%),
+        linear-gradient(180deg, #2f2d2a 0%, #262422 35%, #1f1d1b 75%, #1a1816 100%);
+}
+
+.new-rule-card p {
+    margin:0;
+    text-align: center;
+    line-height: 1.2;
+}
+
+.new-rule-title {
+    color: var(--ink);
+    font-size: 1.7em;
+    font-weight: 700;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.new-rule-description {
+    /* color: var(--ink); */
+    color: var(--ink-secondary);
+    font-size: 1.4em;
+    font-weight: 600;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.new-rule-duration {
+    color: #ab0000;
+    font-size: 1.2em;
+    font-weight: 300;
+    font-style: italic;
+}
+
+
+
 
 /* =============================================================================
    CURRENT RULES
@@ -300,7 +425,7 @@ body {
 }
 
 /* =============================================================================
-   GAME SECTION & TOOLBAR
+   GAME TOOLBAR
    ============================================================================= */
 
 .game-toolbar {
@@ -362,11 +487,12 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap:50px;
 }
 
 .section-heading h2 {
     margin: 0;
-    font-size: 20px;
+    font-size: 1.2em;
     font-weight: 500;
     color: var(--ink-secondary);
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
@@ -378,6 +504,17 @@ body {
     grid-template-columns: repeat(8, 1fr);
     padding-right: 8px;
     width: 100%;
+}
+
+.ignore-turns-label {
+    font-size: 1.1em;
+    font-weight: 500;
+    color: var(--muted);
+}
+
+.ignore-turns-checkbox {
+    transform: scale(2.0);   /* 1 = normal size */
+    margin-right: 8px;       /* spacing from label text */
 }
 
 /* =============================================================================

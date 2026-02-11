@@ -11,9 +11,9 @@
 <body>
     <div class="page">
         <header class="page-header">
+            <div id='title-card' class="title-card white-turn">White Turn<div>
             <!-- <h1 id="header-text">Chess Chaos</h1> -->
-            <div class="title-card white-turn">White Turn<div>
-            <!-- <button id="turn-swap">🔄️</button> -->
+            <!-- <button id="debug-swap-modes" style="color: #000000">swap modes</button> -->
         </header>
 
         <section id="game-section" class="game-section">
@@ -25,21 +25,23 @@
                     </div>
                 </div>
             </div>
+            <div id="new-rules" class="new-rules hidden">
+                <p>MAKE YOUR CHOICE</p>
+                <!-- Example format:
+                <div class="new-rule-card">
+                    <p class="new-rule-title">Pacifist</p>
+                    <p class="new-rule-description">Pawns can attack left and right</p>
+                    <p class="new-rule-duration">Turns Left: 2</p>
+                </div> -->
+            </div>
         </section>
 
         <section id="current-rules-section" class="current-rules-section">
+            <!-- Example format:
             <div class="current-rule-card">
                 <p class="current-rule-description">Pawns can attack left and right</p>
                 <p class="current-rule-duration">Turns Left: 2</p>
-            </div>
-            <div class="current-rule-card">
-                <p class="current-rule-description">Pawns can attack left and right</p>
-                <p class="current-rule-duration">Turns Left: 2</p>
-            </div>
-            <div class="current-rule-card">
-                <p class="current-rule-description">Pawns can attack left and right</p>
-                <p class="current-rule-duration">Turns Left: 2</p>
-            </div>
+            </div> -->
         </section>
 
         </section>
@@ -47,6 +49,10 @@
         <section id="settings-section" class="settings-section">
             <div class="section-heading">
                 <h2>Piece Settings</h2>
+                <label class="ignore-turns-label">
+                    <input type="checkbox" id="ignore-turns-checkbox" class="ignore-turns-checkbox">
+                    Ignore Turns
+                </label>
             </div>
             <div id="settings-panel" class="settings-panel"></div>
             <div class="game-toolbar">

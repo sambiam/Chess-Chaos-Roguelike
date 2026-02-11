@@ -35,6 +35,7 @@ export default async function handler(req, res) {
             const rawBoardState = await redis.hgetall(REDIS_KEY);
 
             console.log("got raw board state", rawBoardState);
+            // UPDATE - it seems like it converts strings back into JSON automatically?
             // Parse all the string JSON values back into JSON
             // const boardState = Object.fromEntries(
             //     Object.entries(rawBoardState).map(([id, jsonString]) => [Number(id), JSON.parse(jsonString)])

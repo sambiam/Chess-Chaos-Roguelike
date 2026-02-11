@@ -21,8 +21,8 @@ import {
     playCaptureSounds,
 } from './utils.js';
 import {
-    rules,
-} from './rules.js';
+    turns
+} from './turns.js';
 
 // =============================================================================
 // CONSTANTS
@@ -246,6 +246,7 @@ function initializePusher() {
 	const pusherCluster = 'us2';
     const CHANNEL_NAME = 'chess-events';
     const EVENT_TYPE_BOARD_UPDATE = 'board-event';
+    const EVENT_TYPE_TURN_UPDATE = 'turn-event';
 
     // Create Pusher client
 	pusherClient = new Pusher(pusherKey, {cluster: pusherCluster,});
@@ -257,6 +258,12 @@ function initializePusher() {
     // This can include piece updates, settings, or a full board reset
 	pusherChannel.bind(EVENT_TYPE_BOARD_UPDATE, (data) => {
         handleBoardUpdate(data);
+	});
+
+    // Listen for any updates to the rules
+    // This can include turn count, current rules, and new rules
+	pusherChannel.bind(EVENT_TYPE_TURN_UPDATE, (data) => {
+        handleTurnUpdate(data);
 	});
 	
 	// Pusher connection state
@@ -286,9 +293,10 @@ resetButton.addEventListener('click', async () => {
     handleResetBoard();
     zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);
     zoomPan.resetInteractionState();
-
     // Send a board update event to server
     await apiPost('/api/board-state', {clientSecret: clientSecret, userId: getUserId(), newState: getSimpleBoardState()});
+    // Tell server to reset turn send
+    await apiPost('/api/turns', {clientSecret: clientSecret, action: 'RESET_TURNS',});
 });
 
 // Settings panel: handle image dropdown changes
@@ -299,10 +307,7 @@ settingsPanel.addEventListener('change', async event => {
         piece.image = event.target.value;
         updatePieceImage(piece);
     }
-
-    // Send a board update event to server
-    // TODO - currently, only the image setting is tracked in getSimpleBoardState()
-    //        In future will add more settings and add them to getSimpleBoardState() and syncBoardWithServer()
+    // Send board update event to server (it includes each piece's images)
     await apiPost('/api/board-state', {clientSecret: clientSecret, userId: getUserId(), newState: getSimpleBoardState()});
 });
 
@@ -409,6 +414,13 @@ const handleClientMove = async (slot, targetCol, targetRow) => {
     // Include clientSecret for authentication, include userId for receiving clients
     const response = await apiPost('/api/board-state', {clientSecret: clientSecret, userId: getUserId(), newState: getSimpleBoardState()});
     console.log("Posted new board state to the server", response)
+
+    // Tell server to process a turn
+    if (document.getElementById('ignore-turns-checkbox').checked) {
+        console.log("Skipping turn processing because the Ignore Turns checkbox is checked");
+    } else {
+        await apiPost('/api/turns', {clientSecret: clientSecret, action: 'INCREMENT_TURN',});
+    }
 };
 
 // =============================================================================
@@ -477,6 +489,107 @@ const syncBoardWithServer = (newState) => {
     }
 };
 
+
+// Process a rules event from the server
+const handleTurnUpdate = (data) => {
+
+    console.log("We got a turn update from the server with this info:", data.newTurn);
+    const newTurnState = data.newTurn;
+
+    turns.currentTurn = newTurnState.currentTurn;
+    turns.currentPlayer = newTurnState.currentPlayer;
+    turns.currentRules = newTurnState.currentRules;
+    turns.newRuleChoices = newTurnState.newRuleChoices;
+
+    // Update the Title visuals
+    const titleCard = document.getElementById('title-card');
+    if (turns.currentPlayer === 'white') {
+        titleCard.textContent = 'White Turn';
+        titleCard.classList.remove('black-turn');
+        titleCard.classList.add('white-turn');
+    } else {
+        titleCard.textContent = 'Black Turn';
+        titleCard.classList.remove('white-turn');
+        titleCard.classList.add('black-turn');
+    }
+
+    // Update the Current Rule visuals
+    const currentRulesEl = document.getElementById("current-rules-section");
+    currentRulesEl.innerHTML = ""; // EXECUTE ORDER 67 - KILL THE YOUNGLINGS
+    for (const nextRule of turns.currentRules) {
+        const newRuleEl = document.createElement('div');
+        newRuleEl.classList.add('current-rule-card');
+        const nextDescription = document.createElement('p');
+        nextDescription.classList.add('current-rule-description');
+        nextDescription.textContent = nextRule.description;
+        newRuleEl.append(nextDescription)
+        const nextDuration = document.createElement('p');
+        nextDuration.classList.add('current-rule-duration');
+        nextDuration.textContent = `Turns Left: ${nextRule.turnsLeft}`;
+        newRuleEl.append(nextDuration);
+        currentRulesEl.append(newRuleEl);
+    }
+
+    // If a rule was just selected, lets do a 1-time reset to the "default" visual state
+    if (newTurnState.justSelectedRule) {
+        document.getElementById('viewport').classList.remove("choices-mode");
+        document.getElementById('new-rules').classList.add("hidden");
+        zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);         
+    }
+
+    if (turns.newRuleChoices.length > 0) {
+        // HOLY FUCKING BEANS, THERE ARE CHOICES TO MAKE!!
+        // Change visual state to choices mode
+        document.getElementById('viewport').classList.add("choices-mode");
+        const newRulesEl = document.getElementById('new-rules');
+        newRulesEl.innerHTML = '';
+        newRulesEl.classList.remove("hidden");
+        zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);  
+
+        const MAKEYOURCHOICE = document.createElement('p');
+        MAKEYOURCHOICE.classList.add('new-rule-duration');
+        MAKEYOURCHOICE.textContent = "MAKE YOUR CHOICE";
+        newRulesEl.append(MAKEYOURCHOICE);
+
+        // Now create the New Rules panel
+        for (const nextRule of turns.newRuleChoices) {
+            const newRuleCard = document.createElement('div');
+            newRuleCard.classList.add('new-rule-card');
+
+            const nextTitle = document.createElement('p');
+            nextTitle.classList.add('new-rule-title');
+            nextTitle.textContent = nextRule.title;
+            newRuleCard.append(nextTitle);
+
+            const nextDescription = document.createElement('p');
+            nextDescription.classList.add('new-rule-description');
+            nextDescription.textContent = nextRule.description;
+            newRuleCard.append(nextDescription);
+
+            const nextDuration = document.createElement('p');
+            nextDuration.classList.add('new-rule-duration');
+            if (nextRule.isInstant) {
+                nextDuration.textContent = `Instant`;
+            } else {
+                nextDuration.textContent = `${nextRule.turnsLeft} Turns`;
+            }            
+            newRuleCard.append(nextDuration);
+            newRuleCard.addEventListener('click', async () => {
+                // We clicked a new rule! Send the selected rule to the server
+                if (turns.newRuleChoices) {
+                    await apiPost('/api/turns', {
+                        action: 'SELECT_RULE',
+                        payload: {
+                            chosenIndex: turns.newRuleChoices.indexOf(nextRule),
+                        },
+                    });
+                }
+            });
+            newRulesEl.append(newRuleCard);
+        }
+    }    
+};
+
 // =============================================================================
 // INITIALIZATION
 // =============================================================================
@@ -486,24 +599,27 @@ renderSettingsPanel();
 renderPieces();
 zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);
 
+// Initialize server connection
+initializePusher();
+
 // Pull the state of the board from the Redis DB, update our board state appropriately
 await pullServerBoardState();
 
-// Initialize server connection (when implemented)
-initializePusher();
 
-/*
-Temp tests for future rule design changes
-const viewportShrink = function() {
-    document.getElementById('viewport').style.width = '60vw';
+// TEMP TEMP TEMP TEMP
+// TEMP TEMP TEMP TEMP
+// TEMP TEMP TEMP TEMP
+const endChoosingRules = function() {
+    document.getElementById('viewport').classList.remove("choices-mode");
+    document.getElementById('new-rules').classList.add("hidden");
     zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);
 }
-const viewportExpand = function() {
-    document.getElementById('viewport').style.width = '90vw';
-    zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);
+const startChoosingRules = function() {
+    document.getElementById('viewport').classList.add("choices-mode");
+    document.getElementById('new-rules').classList.remove("hidden");
+    zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);    
 }
-setTimeout(viewportShrink, 3000);
-setTimeout(viewportExpand, 6000);
-setTimeout(viewportShrink, 9000);
-setTimeout(viewportExpand, 12000);
-*/
+// setTimeout(endChoosingRules, 2000);
+// setTimeout(startChoosingRules, 3000);
+// setTimeout(endChoosingRules, 6000);
+// setTimeout(startChoosingRules, 8000);
