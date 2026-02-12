@@ -1,4 +1,4 @@
-import './style.css';
+﻿import './style.css';
 import Pusher from 'pusher-js';
 import { createZoomPan } from './viewport.js';
 import {
@@ -858,6 +858,15 @@ const pullServerBoardState = async () => {
     syncBoardWithServer(result.boardState); // Update client board based on server data
 }
 
+const pullServerTurnState = async () => {
+    const result = await apiGet('/api/turns', {clientSecret: clientSecret});
+    if (!result.success) {
+        console.log("Failed to pull turn state from the server");
+        return;
+    }
+    handleTurnUpdate(result.turnState); // Update client board based on server data
+}
+
 // Process a move event from the server
 const handleBoardUpdate = (boardData) => {
 
@@ -1037,6 +1046,7 @@ const handleTurnUpdate = (data) => {
                 // We clicked a new rule! Send the selected rule to the server
                 if (turns.newRuleChoices) {
                     await apiPost('/api/turns', {
+                        clientSecret: clientSecret,
                         action: 'SELECT_RULE',
                         payload: {
                             chosenIndex: turns.newRuleChoices.indexOf(nextRule),
@@ -1270,6 +1280,7 @@ async function initializeApp() {
 
     // Pull the state of the board from the Redis DB, update our board state appropriately
     await pullServerBoardState();
+    await pullServerTurnState();
 }
 
 

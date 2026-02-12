@@ -43,9 +43,10 @@ export default async function handler(req, res) {
             // Return the full hash of the board state
             const rawTurnState = await redis.hgetall(REDIS_KEY);
             console.log("got raw board state", rawTurnState);
+            const newTurn = {newTurn: rawTurnState} // Sorta janky, but doing this to match the naming on the client
             return res.status(200).json({
                 success: true,
-                boardState: rawTurnState,
+                turnState: newTurn,
                 message: 'board status retrieved'
             });
         } catch (error) {
@@ -93,7 +94,7 @@ export default async function handler(req, res) {
                         message: `Reset the turn state`,
                     });
                 case 'INCREMENT_TURN':
-                    const newTurnState = await incrementTurn(currentTurnState);
+                    await incrementTurn(currentTurnState);
                     return res.status(200).json({
                         success: true,
                         message: `New turns successfully processed`,
