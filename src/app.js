@@ -1,4 +1,4 @@
-﻿import './style.css';
+import './style.css';
 import Pusher from 'pusher-js';
 import { createZoomPan } from './viewport.js';
 import {
@@ -53,6 +53,7 @@ let clientSecret = '';
 const settingsPanel = document.getElementById('settings-panel');
 const piecesLayer = document.getElementById('pieces-layer');
 const boardEffectsLayer = document.getElementById('board-effects-layer');
+const highlightLayer = document.getElementById('highlight-layer');
 const viewport = document.getElementById('viewport');
 const stage = document.getElementById('stage');
 const resetButton = document.getElementById('reset-board');
@@ -286,6 +287,89 @@ const updateSquareEffect = (col, row) => {
 };
 
 // =============================================================================
+// RANDOMIZER SQUARE HIGHLIGHT
+// =============================================================================
+// Displays a red dotted border on a board square for ~5 seconds, then fades out.
+// Only one square can be highlighted at a time. Synced to all clients via board
+// state with a timestamp guard so stale highlights are ignored.
+
+const HIGHLIGHT_DURATION = 5000;   // Total visible time in ms
+const HIGHLIGHT_FADE_AT  = 4000;   // Start fading after this many ms
+
+const highlightEl = document.createElement('div');
+highlightEl.className = 'square-highlight';
+highlightEl.style.display = 'none';
+highlightLayer.appendChild(highlightEl);
+
+let highlightTimer = null;
+let highlightFadeTimer = null;
+
+// Show the highlight visually at a given square for `duration` ms
+const showHighlightVisual = (col, row, duration = HIGHLIGHT_DURATION) => {
+    if (highlightTimer) clearTimeout(highlightTimer);
+    if (highlightFadeTimer) clearTimeout(highlightFadeTimer);
+
+    highlightEl.style.left = `${col * SQUARE_SIZE}px`;
+    highlightEl.style.top = `${row * SQUARE_SIZE}px`;
+    highlightEl.classList.remove('fading');
+    highlightEl.style.display = '';
+
+    const fadeStart = Math.max(0, duration - (HIGHLIGHT_DURATION - HIGHLIGHT_FADE_AT));
+    highlightFadeTimer = setTimeout(() => {
+        highlightEl.classList.add('fading');
+    }, fadeStart);
+
+    highlightTimer = setTimeout(() => {
+        highlightEl.style.display = 'none';
+        highlightEl.classList.remove('fading');
+    }, duration);
+};
+
+// Hide the highlight immediately
+const hideHighlight = () => {
+    if (highlightTimer) clearTimeout(highlightTimer);
+    if (highlightFadeTimer) clearTimeout(highlightFadeTimer);
+    highlightEl.style.display = 'none';
+    highlightEl.classList.remove('fading');
+    state.highlightedSquare = null;
+};
+
+// Called by randomizer buttons: highlight locally + send to server
+const showHighlight = async (col, row) => {
+    state.highlightedSquare = { col, row, timestamp: Date.now() };
+    showHighlightVisual(col, row);
+
+    // Persist to server so other clients see the highlight
+    await apiPost('/api/board-state', {
+        clientSecret: clientSecret,
+        userId: getUserId(),
+        newState: getSimpleBoardState(),
+    });
+};
+
+// Called when we receive a board state from the server that includes a highlight
+const syncHighlightFromServer = (serverHighlight) => {
+    if (!serverHighlight || !serverHighlight.timestamp) {
+        // No highlight on server — only hide if we didn't originate the current one
+        return;
+    }
+    const age = Date.now() - serverHighlight.timestamp;
+    if (age >= HIGHLIGHT_DURATION) return; // Too old, ignore
+
+    // Avoid re-triggering if it's the same highlight we already show
+    const cur = state.highlightedSquare;
+    if (cur &&
+        cur.col === serverHighlight.col &&
+        cur.row === serverHighlight.row &&
+        cur.timestamp === serverHighlight.timestamp) {
+        return; // Already showing this exact highlight
+    }
+
+    state.highlightedSquare = { ...serverHighlight };
+    showHighlightVisual(serverHighlight.col, serverHighlight.row, HIGHLIGHT_DURATION - age);
+};
+
+// =============================================================================
 // BOARD STATE HELPERS
 // =============================================================================
 
@@ -333,6 +417,8 @@ const handleResetBoard = () => {
             updateSquareEffect(col, row);
         }
     }
+    // Clear highlight (resetBoard already cleared state.highlightedSquare)
+    hideHighlight();
 };
 
 // =============================================================================
@@ -797,7 +883,7 @@ const syncBoardWithServer = (newState) => {
         }
     */
     for (const [slot, newPiece] of Object.entries(newState)) {
-        if (slot === 'boardEffects') continue; // Handled separately below
+        if (slot === 'boardEffects' || slot === 'highlightedSquare') continue; // Handled separately below
         const currentPiece = state.pieces[Number(slot)];
         if (!currentPiece) continue; // Skip unknown keys
         if (currentPiece.position.row !== newPiece.position.row || currentPiece.position.col !== newPiece.position.col) {
@@ -846,6 +932,11 @@ const syncBoardWithServer = (newState) => {
                 updateSquareEffect(col, row);
             }
         }
+    }
+
+    // Sync randomizer highlight (timestamp-guarded)
+    if (newState.highlightedSquare !== undefined) {
+        syncHighlightFromServer(newState.highlightedSquare);
     }
 };
 
@@ -953,8 +1044,9 @@ const handleTurnUpdate = (data) => {
 // =============================================================================
 // RANDOMIZER SECTION
 // =============================================================================
-// Self-contained utility panel for randomly picking pieces, squares, or numbers.
-// Does NOT modify board state, turn state, or any visuals on the board.
+// Utility panel for randomly picking pieces, squares, or numbers.
+// Does NOT modify turn state. Square/piece selections trigger a board highlight
+// (red dotted border for ~5 seconds) that is synced to all clients via board state.
 
 const randomizerPanel = document.getElementById('randomizer-panel');
 
@@ -1051,7 +1143,10 @@ const renderRandomizerPanel = () => {
     randomizerPanel.appendChild(randRow(
         'Random Square',
         randBtn('Generate', () => {
-            sqResult.textContent = toNotation(randInt(0, 7), randInt(0, 7));
+            const col = randInt(0, 7);
+            const row = randInt(0, 7);
+            sqResult.textContent = toNotation(col, row);
+            showHighlight(col, row);
         }),
         sqResult,
     ));
@@ -1063,19 +1158,33 @@ const renderRandomizerPanel = () => {
         randBtn('Generate', () => {
             const sq = randItem(getEmptySquares());
             emptySqResult.textContent = sq ? toNotation(sq.col, sq.row) : 'None found';
+            if (sq) showHighlight(sq.col, sq.row);
         }),
         emptySqResult,
     ));
 
     randomizerPanel.appendChild(randSeparator());
 
-    // --- 4. Random White Piece ---
+    // --- 4. Random Piece (any team) ---
+    const anyPieceResult = randResult();
+    randomizerPanel.appendChild(randRow(
+        'Random Piece',
+        randBtn('Generate', () => {
+            const p = randItem(getAlivePieces());
+            anyPieceResult.textContent = p ? `${p.label} (${p.notation})` : 'None found';
+            if (p) showHighlight(p.position.col, p.position.row);
+        }),
+        anyPieceResult,
+    ));
+
+    // --- 5. Random White Piece ---
     const whitePieceResult = randResult();
     randomizerPanel.appendChild(randRow(
         'Random White Piece',
         randBtn('Generate', () => {
             const p = randItem(getAlivePieces('white'));
             whitePieceResult.textContent = p ? `${p.label} (${p.notation})` : 'None found';
+            if (p) showHighlight(p.position.col, p.position.row);
         }),
         whitePieceResult,
     ));
@@ -1087,6 +1196,7 @@ const renderRandomizerPanel = () => {
         randBtn('Generate', () => {
             const p = randItem(getAlivePieces('black'));
             blackPieceResult.textContent = p ? `${p.label} (${p.notation})` : 'None found';
+            if (p) showHighlight(p.position.col, p.position.row);
         }),
         blackPieceResult,
     ));
@@ -1102,14 +1212,17 @@ const renderRandomizerPanel = () => {
             randBtn(`Random ${type}`, () => {
                 const p = randItem(getAlivePieces(null, type));
                 result.textContent = p ? `${p.label} (${p.notation})` : 'None found';
+                if (p) showHighlight(p.position.col, p.position.row);
             }),
             randBtn(`White ${type}`, () => {
                 const p = randItem(getAlivePieces('white', type));
                 result.textContent = p ? `${p.label} (${p.notation})` : 'None found';
+                if (p) showHighlight(p.position.col, p.position.row);
             }),
             randBtn(`Black ${type}`, () => {
                 const p = randItem(getAlivePieces('black', type));
                 result.textContent = p ? `${p.label} (${p.notation})` : 'None found';
+                if (p) showHighlight(p.position.col, p.position.row);
             }),
             result,
         ));

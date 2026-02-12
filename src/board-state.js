@@ -123,7 +123,8 @@ export const piecesConfig = [
 export const state = {
     pieces: {},
     selectedSlot: null,
-    boardEffects: {},  // key: "col,row" → value: array of effect name strings
+    boardEffects: {},       // key: "col,row" → value: array of effect name strings
+    highlightedSquare: null, // { col, row, timestamp } or null — ephemeral randomizer highlight
 };
 
 // This generates a simplified version of the state,
@@ -161,6 +162,10 @@ export const getSimpleBoardState = () => {
             simpleState.boardEffects[key] = [...effects];
         }
     }
+    // Include highlight (with timestamp for expiry)
+    simpleState.highlightedSquare = state.highlightedSquare
+        ? { ...state.highlightedSquare }
+        : null;
     return simpleState;
 };
 
@@ -300,6 +305,7 @@ export const resetBoard = () => {
         resetPieces.push(piece);
     });
     state.boardEffects = {};  // Clear all board square effects on reset
+    state.highlightedSquare = null;  // Clear highlight on reset
     return resetPieces; // Return all pieces so app.js can update visuals
 };
 
