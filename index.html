@@ -1,4 +1,4 @@
-<!DOCTYPE HTML>
+﻿<!DOCTYPE HTML>
 <html>
 <head>
     <title>Chess Chaos</title>
@@ -9,11 +9,17 @@
     <style>@import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,200..1000;1,200..1000&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap');</style>
 </head>
 <body>
+    <div id="password-modal">
+        <form id="password-form">
+            <label>Password</label>
+            <input id="password-input" type="password" >
+            <button id="password-button" type="submit">Enter</button>
+        </form>
+    </div>
+
     <div class="page">
         <header class="page-header">
             <div id='title-card' class="title-card white-turn">White Turn<div>
-            <!-- <h1 id="header-text">Chess Chaos</h1> -->
-            <!-- <button id="debug-swap-modes" style="color: #000000">swap modes</button> -->
         </header>
 
         <section id="game-section" class="game-section">
@@ -54,7 +60,7 @@
                 Ignore Turns
             </label>
             <button id="reset-board" type="button">Reset Board</button>
-            <h3 id="pusher-status">Pusher Status</h3>
+            <h3 id="pusher-status">Disconnected</h3>
         </section>
 
         <section id="randomizer-section" class="randomizer-section">

@@ -47,6 +47,62 @@ body {
 }
 
 /* =============================================================================
+   PASSWORD MODAL
+   ============================================================================= */
+
+#password-modal {
+    z-index: 1000;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(49, 46, 43, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#password-form {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    padding: 30px;
+    border: 3px solid var(--ink-secondary);
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+#password-form label {
+    font-size: clamp(0.5rem, 1.5vw, 1.5vw);
+    font-weight: 800;
+    line-height: 1.15;
+}
+
+#password-input {
+    color: #000000;
+    font-weight: 800;
+}
+
+#password-button {
+    color: #000000;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 
+        0 4px 12px rgba(0, 0, 0, 0.4),
+        0 0 15px rgba(129, 182, 76, 0.3);
+}
+
+#password-button:hover {
+    background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dim) 100%);
+    border-color: var(--accent-strong);
+    color: #fff;
+}
+
+
+/* =============================================================================
    PAGE LAYOUT
    ============================================================================= */
 
@@ -81,7 +137,6 @@ body {
     
     font-size: clamp(1rem, 3vw, 10vw);
     font-weight: 800;
-    font-weight: 700;
     line-height: 1.15;
     text-align: center;
     

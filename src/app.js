@@ -748,6 +748,7 @@ pieceContextMenu.addEventListener('contextmenu', event => {
 // =============================================================================
 
 // Right-click: select a piece, move the selected piece, or open piece context menu
+// This is our MAIN action handler from the Viewport's POV
 viewport.addEventListener('contextmenu', async event => {
     event.preventDefault();
     const targetSquare = screenToSquare(event.clientX, event.clientY);
@@ -826,14 +827,21 @@ const handleClientMove = async (slot, targetCol, targetRow) => {
     // Send entire simple board state to server
     // Makes it easier for the server to maintain a single source of truth at all times, rather than just move diffs
     // Include clientSecret for authentication, include userId for receiving clients
-    const response = await apiPost('/api/board-state', {clientSecret: clientSecret, userId: getUserId(), newState: getSimpleBoardState()});
+    let response = await apiPost('/api/board-state', {clientSecret: clientSecret, userId: getUserId(), newState: getSimpleBoardState()});
+    if (!response.success) {
+        console.log("Failed to update Board State on server. Message: ", response.message);
+        return;
+    }
     console.log("Posted new board state to the server", response)
 
     // Tell server to process a turn
     if (document.getElementById('ignore-turns-checkbox').checked) {
         console.log("Skipping turn processing because the Ignore Turns checkbox is checked");
     } else {
-        await apiPost('/api/turns', {clientSecret: clientSecret, action: 'INCREMENT_TURN',});
+        response = await apiPost('/api/turns', {clientSecret: clientSecret, action: 'INCREMENT_TURN',});
+        if (!response.success) {
+            console.log("Failed to update Turn State on server. Message: ", response.message);
+        }
     }
 };
 
@@ -1233,33 +1241,59 @@ const renderRandomizerPanel = () => {
 // INITIALIZATION
 // =============================================================================
 
-initializePieces();
-renderSettingsPanel();
-renderPieces();
-renderBoardEffectsLayer();
-renderRandomizerPanel();
-zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);
+// Setup Password Modal
+const passwordForm = document.getElementById('password-form');
+passwordForm.addEventListener('submit', async (e) => {
+    e.preventDefault(); // Prevent default form submission
+    // Don't bother verifying the password, we'll just do this on the server during each API call
+    clientSecret = document.getElementById('password-input').value;
+    document.getElementById('password-modal').style.display = 'none';
+    await initializeApp();
+});
 
-// Initialize server connection
-initializePusher();
+// UNCOMMENT THIS TO REMOVE MODAL FOR TESTING
+// document.getElementById('password-modal').style.display = 'none';
+// clientSecret = 'test';
+// initializeApp();
 
-// Pull the state of the board from the Redis DB, update our board state appropriately
-await pullServerBoardState();
-
-
-// TEMP TEMP TEMP TEMP
-// TEMP TEMP TEMP TEMP
-// TEMP TEMP TEMP TEMP
-const endChoosingRules = function() {
-    document.getElementById('viewport').classList.remove("choices-mode");
-    document.getElementById('new-rules').classList.add("hidden");
+async function initializeApp() {
+    // Initialize all client elements
+    initializePieces();
+    renderSettingsPanel();
+    renderPieces();
+    renderBoardEffectsLayer();
+    renderRandomizerPanel();
     zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);
+
+    // Initialize server connection
+    initializePusher();
+
+    // Pull the state of the board from the Redis DB, update our board state appropriately
+    await pullServerBoardState();
 }
-const startChoosingRules = function() {
-    document.getElementById('viewport').classList.add("choices-mode");
-    document.getElementById('new-rules').classList.remove("hidden");
-    zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);    
-}
+
+
+
+
+
+
+
+
+
+
+// TEMP TEMP TEMP TEMP
+// TEMP TEMP TEMP TEMP
+// TEMP TEMP TEMP TEMP
+// const endChoosingRules = function() {
+//     document.getElementById('viewport').classList.remove("choices-mode");
+//     document.getElementById('new-rules').classList.add("hidden");
+//     zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);
+// }
+// const startChoosingRules = function() {
+//     document.getElementById('viewport').classList.add("choices-mode");
+//     document.getElementById('new-rules').classList.remove("hidden");
+//     zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);    
+// }
 // setTimeout(endChoosingRules, 2000);
 // setTimeout(startChoosingRules, 3000);
 // setTimeout(endChoosingRules, 6000);

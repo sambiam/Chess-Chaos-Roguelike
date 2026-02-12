@@ -25,21 +25,20 @@ export default async function handler(req, res) {
         
         console.log("ATTEMPTING TO GET BOARD STATE");
 
-        // TODO - check the provided clientSecret against the secret env variable on vercel
-        // const { clientSecret } = req.query;
-        // let vercelClientSecret = process.env.MY_VERCEL_ENV_VARIABLE_NAME;
-        // if (clientSecret !== vercelClientSecret) { ... do stuff }
+        // First check the client's password against the real password on Vercel
+        const { clientSecret } = req.query;
+        if (!checkPassword(clientSecret)) {
+            console.log("A client provided the wrong password, rejecting the Get Board State Request, password was ", clientSecret);
+            return res.status(401).json({
+                success: false,
+                message: "Invalid password, get outta here ya rascal"
+            });
+        }
 
         try {
             // Return the full hash of the board state
             const rawBoardState = await redis.hgetall(REDIS_KEY);
-
             console.log("got raw board state", rawBoardState);
-            // UPDATE - it seems like it converts strings back into JSON automatically?
-            // Parse all the string JSON values back into JSON
-            // const boardState = Object.fromEntries(
-            //     Object.entries(rawBoardState).map(([id, jsonString]) => [Number(id), JSON.parse(jsonString)])
-            //   );
             // Send board state to the client
             return res.status(200).json({
                 success: true,
@@ -60,9 +59,14 @@ export default async function handler(req, res) {
 
             const { clientSecret, userId, newState } = req.body;
 
-            // TODO - check the provided clientSecret against the secret env variable on vercel
-            // let vercelClientSecret = process.env.MY_VERCEL_ENV_VARIABLE_NAME;
-            // if (clientSecret !== vercelClientSecret) { ... do stuff }
+            // First check the client's password against the real password on Vercel
+            if (!checkPassword(clientSecret)) {
+                console.log("A client provided the wrong password, rejecting the Get Board State Request, password was ", clientSecret);
+                return res.status(401).json({
+                    success: false,
+                    message: "Invalid password, get outta here ya rascal"
+                });
+            }
 
             if (!newState) {
                 return res.status(400).json({ success: false, error: "Did not send value board state"});
@@ -100,4 +104,9 @@ export default async function handler(req, res) {
         success: false,
         error: 'Method not allowed. Use GET to retrieve or POST to interact with the board.'
     });
+}
+
+function checkPassword(clientSecret) {
+    const vercelClientSecret = process.env.CHESS_SECRET;
+    return (clientSecret === vercelClientSecret);
 }

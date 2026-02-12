@@ -29,10 +29,15 @@ export default async function handler(req, res) {
         
         console.log("ATTEMPTING TO GET TURN");
 
-        // TODO - check the provided clientSecret against the secret env variable on vercel
-        // const { clientSecret } = req.query;
-        // let vercelClientSecret = process.env.MY_VERCEL_ENV_VARIABLE_NAME;
-        // if (clientSecret !== vercelClientSecret) { ... do stuff }
+        // First check the client's password against the real password on Vercel
+        const { clientSecret } = req.query;
+        if (!checkPassword(clientSecret)) {
+            console.log("A client provided the wrong password, rejecting the Get Board State Request, password was ", clientSecret);
+            return res.status(401).json({
+                success: false,
+                message: "Invalid password, get outta here ya rascal"
+            });
+        }
 
         try {
             // Return the full hash of the board state
@@ -62,9 +67,14 @@ export default async function handler(req, res) {
             
             const { clientSecret, action, payload } = req.body;
 
-            // TODO - check the provided clientSecret against the secret env variable on vercel
-            // let vercelClientSecret = process.env.MY_VERCEL_ENV_VARIABLE_NAME;
-            // if (clientSecret !== vercelClientSecret) { ... do stuff }
+            // First check the client's password against the real password on Vercel
+            if (!checkPassword(clientSecret)) {
+                console.log("A client provided the wrong password, rejecting the Get Board State Request, password was ", clientSecret);
+                return res.status(401).json({
+                    success: false,
+                    message: "Invalid password, get outta here ya rascal"
+                });
+            }
 
             if (!action) {
                 return res.status(400).json({ success: false, error: 'Missing action type' });
@@ -263,3 +273,7 @@ async function handleRuleSelection(newTurn, payload) {
     await redis.hset(REDIS_KEY, stringifiedState);
 }
 
+function checkPassword(clientSecret) {
+    const vercelClientSecret = process.env.CHESS_SECRET;
+    return (clientSecret === vercelClientSecret);
+}
