@@ -207,6 +207,20 @@ export const selectPiece = (slot) => {
 // PIECE MOVEMENT & CAPTURE
 // =============================================================================
 
+// Revives a captured piece back to its starting position/image, clearing emojis.
+// Returns null if the piece can't be revived (not captured, or starting spot is occupied).
+export const revivePiece = (piece) => {
+    if (!piece || !piece.captured) return null;
+    const blocker = getPieceAt(piece.initialPosition.col, piece.initialPosition.row);
+    if (blocker) return { blocked: true, blockerLabel: blocker.label };
+    piece.captured = false;
+    piece.position = { ...piece.initialPosition };
+    piece.notation = toNotation(piece.position.col, piece.position.row);
+    piece.image = piece.initialImage;
+    piece.emojis = [];
+    return { blocked: false, piece };
+};
+
 // Marks a piece as captured
 export const capturePiece = (piece) => {
     if (!piece || piece.captured) return null;

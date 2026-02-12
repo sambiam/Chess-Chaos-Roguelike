@@ -1,4 +1,4 @@
-import './style.css';
+﻿import './style.css';
 import Pusher from 'pusher-js';
 import { createZoomPan } from './viewport.js';
 import {
@@ -12,6 +12,7 @@ import {
     deselectPiece,
     movePiece,
     capturePiece,
+    revivePiece,
     resetBoard,
     toNotation,
     PIECE_STATUS_OPTIONS,
@@ -72,10 +73,13 @@ const updatePieceImage = piece => {
     piece.element.style.backgroundImage = `url('/images/${encodeURIComponent(piece.image)}')`;
 };
 
-// Toggles the 'captured' CSS class (makes piece invisible)
+// Toggles the 'captured' CSS class (makes piece invisible + marks settings card)
 const updatePieceCaptureState = piece => {
     if (piece.element) {
         piece.element.classList.toggle('captured', piece.captured);
+    }
+    if (piece.settingsCard) {
+        piece.settingsCard.classList.toggle('captured', piece.captured);
     }
 };
 
@@ -162,9 +166,37 @@ const renderSettingsPanel = () => {
         imageRow.append(imageLabel, imageSelect);
         card.appendChild(imageRow);
 
+        // Revive button (only visible when piece is captured)
+        const reviveBtn = document.createElement('button');
+        reviveBtn.className = 'revive-btn';
+        reviveBtn.textContent = 'Revive';
+        reviveBtn.addEventListener('click', async () => {
+            const result = revivePiece(piece);
+            if (!result) return;
+            if (result.blocked) {
+                alert(`Cannot revive ${piece.label} because ${result.blockerLabel} is in the way!`);
+                return;
+            }
+            // Update all visuals for the revived piece
+            updatePieceCaptureState(piece);
+            updatePiecePosition(piece);
+            updatePieceNotation(piece);
+            updatePieceImage(piece);
+            updatePieceEmojis(piece);
+            if (piece.imageSelect) piece.imageSelect.value = piece.image;
+            // Send board state to server (NOT a turn)
+            await apiPost('/api/board-state', {
+                clientSecret: clientSecret,
+                userId: getUserId(),
+                newState: getSimpleBoardState(),
+            });
+        });
+        card.appendChild(reviveBtn);
+
         // Store DOM references on the piece object (view layer properties)
         piece.positionTag = notationTag;
         piece.imageSelect = imageSelect;
+        piece.settingsCard = card;
         
         // Add them in order to match the visual layout of a chess board
         fragment.append(card);
@@ -446,7 +478,7 @@ const showPieceContextMenu = (clientX, clientY, piece) => {
     // "Remove all emojis" option
     const removeBtn = document.createElement('div');
     removeBtn.className = 'context-menu-option context-menu-emoji-remove';
-    removeBtn.textContent = '\u274C  remove';
+    removeBtn.textContent = '\u274C  Remove All';
     removeBtn.addEventListener('click', async () => {
         dismissPieceContextMenu();
         piece.emojis = [];
