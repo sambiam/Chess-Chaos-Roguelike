@@ -636,3 +636,94 @@ body {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
 }
+
+/* =============================================================================
+   PIECE CONTEXT MENU (Double Right-Click)
+   ============================================================================= */
+
+.piece-context-menu {
+    position: fixed;
+    z-index: 9999;
+    min-width: 180px;
+    padding: 6px 0;
+    border: 2px solid var(--border-light);
+    border-radius: 8px;
+    background:
+        radial-gradient(ellipse 120% 80% at 50% 0%, rgba(129, 182, 76, 0.06) 0%, transparent 50%),
+        linear-gradient(180deg, #2e2b28 0%, #232120 100%);
+    box-shadow:
+        0 8px 28px rgba(0, 0, 0, 0.65),
+        0 0 0 1px rgba(0, 0, 0, 0.25),
+        0 0 20px rgba(129, 182, 76, 0.08);
+    user-select: none;
+}
+
+.context-menu-header {
+    padding: 6px 14px 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    white-space: nowrap;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2px;
+}
+
+.context-menu-option {
+    padding: 7px 14px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+    white-space: nowrap;
+}
+
+.context-menu-option:hover {
+    background: rgba(129, 182, 76, 0.18);
+    color: var(--accent-strong);
+}
+
+.context-menu-capture:hover {
+    background: rgba(204, 51, 51, 0.2);
+    color: #f44;
+}
+
+.context-menu-separator {
+    height: 1px;
+    margin: 4px 10px;
+    background: var(--border);
+}
+
+.context-menu-emoji-list {
+    display: flex;
+    flex-direction: column;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.context-menu-emoji-remove:hover {
+    background: rgba(204, 51, 51, 0.2);
+    color: #f44;
+}
+
+/* =============================================================================
+   PIECE STATUS EMOJI OVERLAYS
+   ============================================================================= */
+
+.piece-emoji {
+    position: absolute;
+    width: 35px;
+    height: 35px;
+    font-size: 22px;
+    line-height: 35px;
+    text-align: center;
+    pointer-events: none;
+    z-index: 1;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.7));
+}
+
+.piece-emoji-tl { top: 0;    left: 0;   }
+.piece-emoji-tr { top: 0;    right: 0;  }
+.piece-emoji-bl { bottom: 0; left: 0;   }
+.piece-emoji-br { bottom: 0; right: 0;  }

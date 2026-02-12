@@ -1,4 +1,33 @@
 // =============================================================================
+// PIECE STATUS EMOJIS
+// =============================================================================
+
+// Can add new emojis with { name: 'your_name', emoji: '🎯' } 
+// It'll automatically appear everywhere from there
+
+export const MAX_PIECE_EMOJIS = 4;
+
+export const PIECE_STATUS_OPTIONS = [
+    { name: 'frozen',        emoji: '❄️' },
+    { name: 'immortal',      emoji: '☠️' },
+    { name: 'pawn_moveset',  emoji: '♟️' },
+    { name: 'king_moveset',  emoji: '🫅' },
+    { name: 'queen_moveset', emoji: '👸' },
+    { name: 'soul_link',     emoji: '👨‍❤️‍👨' },
+    { name: 'on_ice',        emoji: '☃️' },
+    { name: 'misc_1',        emoji: '💪' },
+    { name: 'misc_2',        emoji: '🩸' },
+    { name: 'misc_3',        emoji: '💣' },
+    { name: 'misc_4',        emoji: '👑' },
+    { name: 'misc_5',        emoji: '🐎' },
+];
+
+// Lookup map: status name → emoji character (for rendering stored status names)
+export const STATUS_EMOJI_MAP = Object.fromEntries(
+    PIECE_STATUS_OPTIONS.map(opt => [opt.name, opt.emoji])
+);
+
+// =============================================================================
 // CONSTANTS
 // =============================================================================
 
@@ -104,6 +133,7 @@ export const getSimpleBoardState = () => {
             image: piece.image,
             captured: piece.captured,
             position: { ...piece.position },
+            emojis: [...piece.emojis],
         };
     }
     return simpleState;
@@ -126,6 +156,7 @@ export const toNotation = (col, row) => `${String.fromCharCode(65 + col)}${8 - r
 //   - initialPosition: { col, row } - Starting position (for reset)
 //   - notation: Chess notation string (e.g., "E4")
 //   - captured: Boolean indicating if piece has been taken
+//   - emojis: Array of status name strings (e.g., ["frozen", "immortal"])
 
 // Creates the initial piece state from piecesConfig
 export const initializePieces = () => {
@@ -140,6 +171,7 @@ export const initializePieces = () => {
             initialPosition: { col: config.col, row: config.row },
             notation: toNotation(config.col, config.row),
             captured: false,
+            emojis: [],  // Array of status name strings (max MAX_PIECE_EMOJIS)
         };
     });
 };
@@ -179,6 +211,7 @@ export const selectPiece = (slot) => {
 export const capturePiece = (piece) => {
     if (!piece || piece.captured) return null;
     piece.captured = true;
+    piece.emojis = [];  // Clear all status emojis when captured
     if (state.selectedSlot === piece.slot) state.selectedSlot = null;
     return piece; // Return so app.js can update visuals
 };
@@ -224,6 +257,7 @@ export const resetBoard = () => {
         piece.position = { ...piece.initialPosition };
         piece.notation = toNotation(piece.position.col, piece.position.row);
         piece.image = piece.initialImage; // Reset image to initial state
+        piece.emojis = [];  // Clear all status emojis on reset
         resetPieces.push(piece);
     });
     return resetPieces; // Return all pieces so app.js can update visuals

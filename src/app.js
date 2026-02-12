@@ -1,4 +1,4 @@
-﻿import './style.css';
+import './style.css';
 import Pusher from 'pusher-js';
 import { createZoomPan } from './viewport.js';
 import {
@@ -11,8 +11,12 @@ import {
     selectPiece,
     deselectPiece,
     movePiece,
+    capturePiece,
     resetBoard,
-    toNotation
+    toNotation,
+    PIECE_STATUS_OPTIONS,
+    STATUS_EMOJI_MAP,
+    MAX_PIECE_EMOJIS,
 } from './board-state.js';
 import {
     apiGet,
@@ -89,6 +93,21 @@ const updatePieceSelection = (piece, isSelected) => {
     }
 };
 
+// Updates the emoji overlay elements on a piece to match piece.emojis[]
+const updatePieceEmojis = piece => {
+    if (!piece.emojiElements) return;
+    for (let i = 0; i < MAX_PIECE_EMOJIS; i++) {
+        const el = piece.emojiElements[i];
+        if (i < piece.emojis.length) {
+            el.textContent = STATUS_EMOJI_MAP[piece.emojis[i]] || '';
+            el.style.display = '';
+        } else {
+            el.textContent = '';
+            el.style.display = 'none';
+        }
+    }
+};
+
 // =============================================================================
 // RENDERING SETTINGS AND PIECES
 // =============================================================================
@@ -157,11 +176,21 @@ const renderSettingsPanel = () => {
 
 const renderPieces = () => {
     const fragment = document.createDocumentFragment();
+    const emojiPositions = ['tl', 'tr', 'bl', 'br']; // top-left, top-right, bottom-left, bottom-right
     
     Object.values(state.pieces).forEach(piece => {
         const pieceEl = document.createElement('div');
         pieceEl.className = 'piece';
         pieceEl.id = `piece-${piece.slot}`;
+
+        // Create 4 emoji overlay slots (positioned at corners of the piece)
+        piece.emojiElements = emojiPositions.map(pos => {
+            const emojiEl = document.createElement('span');
+            emojiEl.className = `piece-emoji piece-emoji-${pos}`;
+            emojiEl.style.display = 'none';
+            pieceEl.appendChild(emojiEl);
+            return emojiEl;
+        });
         
         // Store DOM reference on the piece object (view layer property)
         piece.element = pieceEl;
@@ -169,6 +198,7 @@ const renderPieces = () => {
         updatePieceImage(piece);
         updatePieceCaptureState(piece);
         updatePiecePosition(piece);
+        updatePieceEmojis(piece);
 
         fragment.appendChild(pieceEl);
     });
@@ -214,6 +244,7 @@ const handleResetBoard = () => {
         updatePieceCaptureState(piece);
         updatePieceNotation(piece);
         updatePieceImage(piece); // Reset visual image
+        updatePieceEmojis(piece); // Clear all status emojis visually
         if (piece.imageSelect) {
             piece.imageSelect.value = piece.image; // Reset dropdown to initial image
         }
@@ -353,14 +384,170 @@ window.addEventListener('resize', () => {
 
 
 // =============================================================================
+// PIECE CONTEXT MENU (Double Right-Click)
+// =============================================================================
+
+// Double-right-click timing
+let lastRightClickTime = 0;
+let lastRightClickSquare = null;
+const DOUBLE_CLICK_THRESHOLD = 400; // ms window to detect double right-click
+
+// Create the context menu element (lives on body so it isn't clipped by viewport overflow)
+const pieceContextMenu = document.createElement('div');
+pieceContextMenu.className = 'piece-context-menu';
+pieceContextMenu.style.display = 'none';
+document.body.appendChild(pieceContextMenu);
+
+// Dismiss / hide the context menu
+const dismissPieceContextMenu = () => {
+    pieceContextMenu.style.display = 'none';
+    pieceContextMenu.innerHTML = '';
+};
+
+// Show the context menu at the click position for the given piece
+const showPieceContextMenu = (clientX, clientY, piece) => {
+    dismissPieceContextMenu(); // Close any existing menu first
+
+    // --- Header: piece label ---
+    const header = document.createElement('div');
+    header.className = 'context-menu-header';
+    header.textContent = piece.label;
+    pieceContextMenu.appendChild(header);
+
+    // --- "Capture" option ---
+    const captureOption = document.createElement('div');
+    captureOption.className = 'context-menu-option context-menu-capture';
+    captureOption.textContent = '\u2620\uFE0F Capture';
+    captureOption.addEventListener('click', async () => {
+        dismissPieceContextMenu();
+        capturePiece(piece);
+        updatePieceCaptureState(piece);
+        updatePieceEmojis(piece); // Clear emoji overlays (capturePiece clears the data)
+        handleDeselectPiece();
+        // Send board state to server (NOT a turn — just a state update)
+        await apiPost('/api/board-state', {
+            clientSecret: clientSecret,
+            userId: getUserId(),
+            newState: getSimpleBoardState(),
+        });
+    });
+    pieceContextMenu.appendChild(captureOption);
+
+    // --- Separator ---
+    const separator = document.createElement('div');
+    separator.className = 'context-menu-separator';
+    pieceContextMenu.appendChild(separator);
+
+    // --- Emoji status options (vertical list: emoji + name) ---
+    // "Remove all" first, then all status emojis from PIECE_STATUS_OPTIONS
+    const emojiList = document.createElement('div');
+    emojiList.className = 'context-menu-emoji-list';
+
+    // "Remove all emojis" option
+    const removeBtn = document.createElement('div');
+    removeBtn.className = 'context-menu-option context-menu-emoji-remove';
+    removeBtn.textContent = '\u274C  remove';
+    removeBtn.addEventListener('click', async () => {
+        dismissPieceContextMenu();
+        piece.emojis = [];
+        updatePieceEmojis(piece);
+        handleDeselectPiece();
+        await apiPost('/api/board-state', {
+            clientSecret: clientSecret,
+            userId: getUserId(),
+            newState: getSimpleBoardState(),
+        });
+    });
+    emojiList.appendChild(removeBtn);
+
+    // Status emoji options (from PIECE_STATUS_OPTIONS)
+    PIECE_STATUS_OPTIONS.forEach(option => {
+        const emojiBtn = document.createElement('div');
+        emojiBtn.className = 'context-menu-option';
+        emojiBtn.textContent = `${option.emoji}  ${option.name}`;
+        emojiBtn.addEventListener('click', async () => {
+            dismissPieceContextMenu();
+            if (piece.emojis.length >= MAX_PIECE_EMOJIS) return; // Already at max (4)
+            piece.emojis.push(option.name);
+            updatePieceEmojis(piece);
+            handleDeselectPiece();
+            await apiPost('/api/board-state', {
+                clientSecret: clientSecret,
+                userId: getUserId(),
+                newState: getSimpleBoardState(),
+            });
+        });
+        emojiList.appendChild(emojiBtn);
+    });
+    pieceContextMenu.appendChild(emojiList);
+
+    // --- Position the menu at the cursor ---
+    pieceContextMenu.style.left = `${clientX}px`;
+    pieceContextMenu.style.top = `${clientY}px`;
+    pieceContextMenu.style.display = '';
+
+    // Nudge if it would overflow the window
+    requestAnimationFrame(() => {
+        const rect = pieceContextMenu.getBoundingClientRect();
+        if (rect.right > window.innerWidth) {
+            pieceContextMenu.style.left = `${clientX - rect.width}px`;
+        }
+        if (rect.bottom > window.innerHeight) {
+            pieceContextMenu.style.top = `${clientY - rect.height}px`;
+        }
+    });
+};
+
+// Dismiss on any mousedown outside the menu (covers left + right clicks)
+document.addEventListener('mousedown', event => {
+    if (pieceContextMenu.style.display !== 'none' && !pieceContextMenu.contains(event.target)) {
+        dismissPieceContextMenu();
+    }
+});
+
+// Dismiss on Escape key
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') dismissPieceContextMenu();
+});
+
+// Prevent the browser's own context menu from appearing on our custom menu
+pieceContextMenu.addEventListener('contextmenu', event => {
+    event.preventDefault();
+});
+
+// =============================================================================
 // HANDLE MOVE ACTIONS
 // =============================================================================
 
-// Right-click: select a piece or move the selected piece
+// Right-click: select a piece, move the selected piece, or open piece context menu
 viewport.addEventListener('contextmenu', async event => {
     event.preventDefault();
     const targetSquare = screenToSquare(event.clientX, event.clientY);
-    
+
+    // --- Double right-click detection ---
+    const now = Date.now();
+    const isDoubleRightClick =
+        (now - lastRightClickTime < DOUBLE_CLICK_THRESHOLD) &&
+        lastRightClickSquare && targetSquare &&
+        lastRightClickSquare.col === targetSquare.col &&
+        lastRightClickSquare.row === targetSquare.row;
+    lastRightClickTime = now;
+    lastRightClickSquare = targetSquare;
+
+    // If double right-click on a piece, show the context menu instead of normal behavior
+    if (isDoubleRightClick && targetSquare) {
+        const piece = getPieceAt(targetSquare.col, targetSquare.row);
+        if (piece) {
+            handleSelectPiece(piece.slot); // Highlight the piece
+            showPieceContextMenu(event.clientX, event.clientY, piece);
+            return;
+        }
+    }
+
+    // Dismiss any open context menu on a normal (single) right-click
+    dismissPieceContextMenu();
+
+    // --- Normal single right-click behavior ---
     if (!targetSquare) {
         handleDeselectPiece();
         return;
@@ -403,6 +590,7 @@ const handleClientMove = async (slot, targetCol, targetRow) => {
     // Update visuals for captured piece if any
     if (result.capturedPiece) {
         updatePieceCaptureState(result.capturedPiece);
+        updatePieceEmojis(result.capturedPiece); // Clear emoji overlays
         playCaptureSounds();
     }
 
@@ -485,6 +673,14 @@ const syncBoardWithServer = (newState) => {
         if (currentPiece.captured !== newPiece.captured) {
             currentPiece.captured = newPiece.captured;
             updatePieceCaptureState(currentPiece);
+        }
+        // Sync emoji statuses (compare arrays by content)
+        const serverEmojis = newPiece.emojis || [];
+        const currentEmojis = currentPiece.emojis;
+        if (serverEmojis.length !== currentEmojis.length ||
+            serverEmojis.some((e, i) => e !== currentEmojis[i])) {
+            currentPiece.emojis = [...serverEmojis];
+            updatePieceEmojis(currentPiece);
         }
     }
 };
