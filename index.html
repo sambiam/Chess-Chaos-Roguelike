@@ -21,6 +21,7 @@
                 <div id="stage" class="stage">
                     <div id="chess-stage" class="chess-stage">
                         <div class="board-sprite" aria-hidden="true"></div>
+                        <div id="board-effects-layer" class="board-effects-layer"></div>
                         <div id="pieces-layer" class="pieces-layer"></div>
                     </div>
                 </div>
@@ -46,19 +47,25 @@
 
         </section>
 
+        <section id="tools-section" class="tools-section">
+            <label class="ignore-turns-label">
+                <input type="checkbox" id="ignore-turns-checkbox" class="ignore-turns-checkbox">
+                Ignore Turns
+            </label>
+            <button id="reset-board" type="button">Reset Board</button>
+            <h3 id="pusher-status">Pusher Status</h3>
+            <!-- <div class="game-toolbar">
+                
+            </div> -->
+        </section>
+
         <section id="settings-section" class="settings-section">
             <div class="section-heading">
                 <h2>Piece Settings</h2>
-                <label class="ignore-turns-label">
-                    <input type="checkbox" id="ignore-turns-checkbox" class="ignore-turns-checkbox">
-                    Ignore Turns
-                </label>
+                
             </div>
             <div id="settings-panel" class="settings-panel"></div>
-            <div class="game-toolbar">
-                <button id="reset-board" type="button">Reset Board</button>
-                <h3 id="pusher-status">Pusher Status</h3>
-            </div>
+            
         </section>
     </div>
 </body>

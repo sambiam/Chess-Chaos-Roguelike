@@ -18,6 +18,8 @@ import {
     PIECE_STATUS_OPTIONS,
     STATUS_EMOJI_MAP,
     MAX_PIECE_EMOJIS,
+    BOARD_EFFECT_OPTIONS,
+    BOARD_EFFECT_EMOJI_MAP,
 } from './board-state.js';
 import {
     apiGet,
@@ -50,6 +52,7 @@ let clientSecret = '';
 
 const settingsPanel = document.getElementById('settings-panel');
 const piecesLayer = document.getElementById('pieces-layer');
+const boardEffectsLayer = document.getElementById('board-effects-layer');
 const viewport = document.getElementById('viewport');
 const stage = document.getElementById('stage');
 const resetButton = document.getElementById('reset-board');
@@ -240,6 +243,49 @@ const renderPieces = () => {
 };
 
 // =============================================================================
+// BOARD EFFECTS VISUAL LAYER
+// =============================================================================
+// Pre-creates 64 container elements (one per square) in the board-effects-layer.
+// Each container holds semi-transparent emoji overlays for that square.
+
+const boardEffectElements = {}; // key: "col,row" → container DOM element
+
+const renderBoardEffectsLayer = () => {
+    boardEffectsLayer.innerHTML = '';
+    for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+            const container = document.createElement('div');
+            container.className = 'board-effect';
+            container.style.left = `${col * SQUARE_SIZE}px`;
+            container.style.top = `${row * SQUARE_SIZE}px`;
+            container.style.display = 'none';
+            boardEffectsLayer.appendChild(container);
+            boardEffectElements[`${col},${row}`] = container;
+        }
+    }
+};
+
+// Updates the visual for a single board square's effects
+const updateSquareEffect = (col, row) => {
+    const key = `${col},${row}`;
+    const container = boardEffectElements[key];
+    if (!container) return;
+    const effects = state.boardEffects[key] || [];
+    container.innerHTML = '';
+    if (effects.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+    effects.forEach(name => {
+        const span = document.createElement('span');
+        span.className = 'board-effect-emoji';
+        span.textContent = BOARD_EFFECT_EMOJI_MAP[name] || '';
+        container.appendChild(span);
+    });
+    container.style.display = '';
+};
+
+// =============================================================================
 // BOARD STATE HELPERS
 // =============================================================================
 
@@ -281,6 +327,12 @@ const handleResetBoard = () => {
             piece.imageSelect.value = piece.image; // Reset dropdown to initial image
         }
     });
+    // Clear all board effect visuals (resetBoard already cleared state.boardEffects)
+    for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+            updateSquareEffect(col, row);
+        }
+    }
 };
 
 // =============================================================================
@@ -436,9 +488,16 @@ const dismissPieceContextMenu = () => {
     pieceContextMenu.innerHTML = '';
 };
 
-// Show the context menu at the click position for the given piece
-const showPieceContextMenu = (clientX, clientY, piece) => {
+// Show the context menu at the click position
+// If a piece is present: shows piece options (capture + status emojis)
+// If empty square: shows board effect options
+const showContextMenu = (clientX, clientY, square, piece) => {
     dismissPieceContextMenu(); // Close any existing menu first
+
+    // ==========================================================
+    // PIECE SECTION (only when double-right-clicking on a piece)
+    // ==========================================================
+    if (piece) {
 
     // --- Header: piece label ---
     const header = document.createElement('div');
@@ -454,9 +513,8 @@ const showPieceContextMenu = (clientX, clientY, piece) => {
         dismissPieceContextMenu();
         capturePiece(piece);
         updatePieceCaptureState(piece);
-        updatePieceEmojis(piece); // Clear emoji overlays (capturePiece clears the data)
+        updatePieceEmojis(piece);
         handleDeselectPiece();
-        // Send board state to server (NOT a turn — just a state update)
         await apiPost('/api/board-state', {
             clientSecret: clientSecret,
             userId: getUserId(),
@@ -470,15 +528,13 @@ const showPieceContextMenu = (clientX, clientY, piece) => {
     separator.className = 'context-menu-separator';
     pieceContextMenu.appendChild(separator);
 
-    // --- Emoji status options (vertical list: emoji + name) ---
-    // "Remove all" first, then all status emojis from PIECE_STATUS_OPTIONS
+    // --- Piece emoji status options ---
     const emojiList = document.createElement('div');
     emojiList.className = 'context-menu-emoji-list';
 
-    // "Remove all emojis" option
     const removeBtn = document.createElement('div');
     removeBtn.className = 'context-menu-option context-menu-emoji-remove';
-    removeBtn.textContent = '\u274C  Remove All';
+    removeBtn.textContent = 'Remove All';
     removeBtn.addEventListener('click', async () => {
         dismissPieceContextMenu();
         piece.emojis = [];
@@ -492,14 +548,13 @@ const showPieceContextMenu = (clientX, clientY, piece) => {
     });
     emojiList.appendChild(removeBtn);
 
-    // Status emoji options (from PIECE_STATUS_OPTIONS)
     PIECE_STATUS_OPTIONS.forEach(option => {
         const emojiBtn = document.createElement('div');
         emojiBtn.className = 'context-menu-option';
         emojiBtn.textContent = `${option.emoji}  ${option.name}`;
         emojiBtn.addEventListener('click', async () => {
             dismissPieceContextMenu();
-            if (piece.emojis.length >= MAX_PIECE_EMOJIS) return; // Already at max (4)
+            if (piece.emojis.length >= MAX_PIECE_EMOJIS) return;
             piece.emojis.push(option.name);
             updatePieceEmojis(piece);
             handleDeselectPiece();
@@ -512,6 +567,61 @@ const showPieceContextMenu = (clientX, clientY, piece) => {
         emojiList.appendChild(emojiBtn);
     });
     pieceContextMenu.appendChild(emojiList);
+
+    } else {
+    // ==========================================================
+    // BOARD EFFECTS SECTION (only on empty squares)
+    // ==========================================================
+
+    const boardHeader = document.createElement('div');
+    boardHeader.className = 'context-menu-header';
+    boardHeader.textContent = `Board (${toNotation(square.col, square.row)})`;
+    pieceContextMenu.appendChild(boardHeader);
+
+    const boardEffectsList = document.createElement('div');
+    boardEffectsList.className = 'context-menu-emoji-list';
+
+    // "Remove all board effects" option
+    const boardRemoveBtn = document.createElement('div');
+    boardRemoveBtn.className = 'context-menu-option context-menu-emoji-remove';
+    boardRemoveBtn.textContent = 'Remove All';
+    boardRemoveBtn.addEventListener('click', async () => {
+        dismissPieceContextMenu();
+        const key = `${square.col},${square.row}`;
+        state.boardEffects[key] = [];
+        updateSquareEffect(square.col, square.row);
+        handleDeselectPiece();
+        await apiPost('/api/board-state', {
+            clientSecret: clientSecret,
+            userId: getUserId(),
+            newState: getSimpleBoardState(),
+        });
+    });
+    boardEffectsList.appendChild(boardRemoveBtn);
+
+    // Board effect emoji options (from BOARD_EFFECT_OPTIONS)
+    BOARD_EFFECT_OPTIONS.forEach(option => {
+        const effectBtn = document.createElement('div');
+        effectBtn.className = 'context-menu-option';
+        effectBtn.textContent = `${option.emoji}  ${option.name}`;
+        effectBtn.addEventListener('click', async () => {
+            dismissPieceContextMenu();
+            const key = `${square.col},${square.row}`;
+            if (!state.boardEffects[key]) state.boardEffects[key] = [];
+            state.boardEffects[key].push(option.name);
+            updateSquareEffect(square.col, square.row);
+            handleDeselectPiece();
+            await apiPost('/api/board-state', {
+                clientSecret: clientSecret,
+                userId: getUserId(),
+                newState: getSimpleBoardState(),
+            });
+        });
+        boardEffectsList.appendChild(effectBtn);
+    });
+    pieceContextMenu.appendChild(boardEffectsList);
+
+    } // end if/else piece vs empty square
 
     // --- Position the menu at the cursor ---
     pieceContextMenu.style.left = `${clientX}px`;
@@ -566,14 +676,12 @@ viewport.addEventListener('contextmenu', async event => {
     lastRightClickTime = now;
     lastRightClickSquare = targetSquare;
 
-    // If double right-click on a piece, show the context menu instead of normal behavior
+    // If double right-click on any valid square, show the context menu
     if (isDoubleRightClick && targetSquare) {
         const piece = getPieceAt(targetSquare.col, targetSquare.row);
-        if (piece) {
-            handleSelectPiece(piece.slot); // Highlight the piece
-            showPieceContextMenu(event.clientX, event.clientY, piece);
-            return;
-        }
+        if (piece) handleSelectPiece(piece.slot); // Highlight the piece if present
+        showContextMenu(event.clientX, event.clientY, targetSquare, piece);
+        return;
     }
 
     // Dismiss any open context menu on a normal (single) right-click
@@ -689,7 +797,9 @@ const syncBoardWithServer = (newState) => {
         }
     */
     for (const [slot, newPiece] of Object.entries(newState)) {
+        if (slot === 'boardEffects') continue; // Handled separately below
         const currentPiece = state.pieces[Number(slot)];
+        if (!currentPiece) continue; // Skip unknown keys
         if (currentPiece.position.row !== newPiece.position.row || currentPiece.position.col !== newPiece.position.col) {
             // The newPiece is in a different position - update our local state
             currentPiece.position = { col: newPiece.position.col, row: newPiece.position.row };
@@ -713,6 +823,28 @@ const syncBoardWithServer = (newState) => {
             serverEmojis.some((e, i) => e !== currentEmojis[i])) {
             currentPiece.emojis = [...serverEmojis];
             updatePieceEmojis(currentPiece);
+        }
+    }
+
+    // Sync board effects
+    if (newState.boardEffects) {
+        const serverEffects = newState.boardEffects;
+        // Clear local effects that no longer exist on server
+        for (const key of Object.keys(state.boardEffects)) {
+            if (!serverEffects[key] || serverEffects[key].length === 0) {
+                state.boardEffects[key] = [];
+                const [col, row] = key.split(',').map(Number);
+                updateSquareEffect(col, row);
+            }
+        }
+        // Update/add effects from server
+        for (const [key, effects] of Object.entries(serverEffects)) {
+            const current = state.boardEffects[key] || [];
+            if (effects.length !== current.length || effects.some((e, i) => e !== current[i])) {
+                state.boardEffects[key] = [...effects];
+                const [col, row] = key.split(',').map(Number);
+                updateSquareEffect(col, row);
+            }
         }
     }
 };
@@ -825,6 +957,7 @@ const handleTurnUpdate = (data) => {
 initializePieces();
 renderSettingsPanel();
 renderPieces();
+renderBoardEffectsLayer();
 zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);
 
 // Initialize server connection

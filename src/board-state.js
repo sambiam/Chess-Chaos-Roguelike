@@ -28,6 +28,23 @@ export const STATUS_EMOJI_MAP = Object.fromEntries(
 );
 
 // =============================================================================
+// BOARD EFFECT EMOJIS
+// =============================================================================
+// Can add new emojis with { name: 'your_name', emoji: '🎯' } 
+
+export const BOARD_EFFECT_OPTIONS = [
+    { name: 'blocked',   emoji: '❌' },
+    { name: 'misc_1', emoji: '💣' },
+    { name: 'misc_2',    emoji: '💀' },
+    { name: 'misc_3',    emoji: '❄️' },
+    { name: 'misc_4',    emoji: '🔀' },
+];
+
+export const BOARD_EFFECT_EMOJI_MAP = Object.fromEntries(
+    BOARD_EFFECT_OPTIONS.map(opt => [opt.name, opt.emoji])
+);
+
+// =============================================================================
 // CONSTANTS
 // =============================================================================
 
@@ -106,6 +123,7 @@ export const piecesConfig = [
 export const state = {
     pieces: {},
     selectedSlot: null,
+    boardEffects: {},  // key: "col,row" → value: array of effect name strings
 };
 
 // This generates a simplified version of the state,
@@ -135,6 +153,13 @@ export const getSimpleBoardState = () => {
             position: { ...piece.position },
             emojis: [...piece.emojis],
         };
+    }
+    // Include board square effects
+    simpleState.boardEffects = {};
+    for (const [key, effects] of Object.entries(state.boardEffects)) {
+        if (effects.length > 0) {
+            simpleState.boardEffects[key] = [...effects];
+        }
     }
     return simpleState;
 };
@@ -274,6 +299,7 @@ export const resetBoard = () => {
         piece.emojis = [];  // Clear all status emojis on reset
         resetPieces.push(piece);
     });
+    state.boardEffects = {};  // Clear all board square effects on reset
     return resetPieces; // Return all pieces so app.js can update visuals
 };
 
