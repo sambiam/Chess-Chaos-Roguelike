@@ -951,6 +951,172 @@ const handleTurnUpdate = (data) => {
 };
 
 // =============================================================================
+// RANDOMIZER SECTION
+// =============================================================================
+// Self-contained utility panel for randomly picking pieces, squares, or numbers.
+// Does NOT modify board state, turn state, or any visuals on the board.
+
+const randomizerPanel = document.getElementById('randomizer-panel');
+
+// --- Randomizer helpers ---
+const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const randItem = arr => arr.length ? arr[Math.floor(Math.random() * arr.length)] : null;
+
+const getAlivePieces = (colorFilter = null, typeFilter = null) => {
+    return Object.values(state.pieces).filter(p => {
+        if (p.captured) return false;
+        if (colorFilter && p.color !== colorFilter) return false;
+        if (typeFilter && !p.label.includes(typeFilter)) return false;
+        return true;
+    });
+};
+
+const getEmptySquares = () => {
+    const empty = [];
+    for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+            if (!getPieceAt(col, row)) empty.push({ col, row });
+        }
+    }
+    return empty;
+};
+
+// --- Randomizer UI builders ---
+const randBtn = (text, onClick) => {
+    const btn = document.createElement('button');
+    btn.className = 'randomizer-btn';
+    btn.textContent = text;
+    btn.addEventListener('click', onClick);
+    return btn;
+};
+
+const randResult = () => {
+    const span = document.createElement('span');
+    span.className = 'randomizer-result';
+    span.textContent = '—';
+    return span;
+};
+
+const randInput = (placeholder, defaultVal) => {
+    const input = document.createElement('input');
+    input.className = 'randomizer-input';
+    input.type = 'number';
+    input.placeholder = placeholder;
+    input.value = defaultVal;
+    return input;
+};
+
+const randRow = (...elements) => {
+    const row = document.createElement('div');
+    row.className = 'randomizer-row';
+    elements.forEach(el => {
+        if (typeof el === 'string') {
+            const lbl = document.createElement('span');
+            lbl.className = 'randomizer-label';
+            lbl.textContent = el;
+            row.appendChild(lbl);
+        } else {
+            row.appendChild(el);
+        }
+    });
+    return row;
+};
+
+const randSeparator = () => {
+    const sep = document.createElement('div');
+    sep.className = 'randomizer-separator';
+    return sep;
+};
+
+const renderRandomizerPanel = () => {
+    randomizerPanel.innerHTML = '';
+
+    // --- 1. Random Integer (inclusive) ---
+    const intMin = randInput('Min', 1);
+    const intMax = randInput('Max', 8);
+    const intResult = randResult();
+    randomizerPanel.appendChild(randRow(
+        'Random Int',
+        intMin, intMax,
+        randBtn('Generate', () => {
+            const min = parseInt(intMin.value) || 0;
+            const max = parseInt(intMax.value) || 0;
+            intResult.textContent = min > max ? 'Invalid' : randInt(min, max);
+        }),
+        intResult,
+    ));
+
+    // --- 2. Random Square ---
+    const sqResult = randResult();
+    randomizerPanel.appendChild(randRow(
+        'Random Square',
+        randBtn('Generate', () => {
+            sqResult.textContent = toNotation(randInt(0, 7), randInt(0, 7));
+        }),
+        sqResult,
+    ));
+
+    // --- 3. Random Empty Square ---
+    const emptySqResult = randResult();
+    randomizerPanel.appendChild(randRow(
+        'Random Empty Square',
+        randBtn('Generate', () => {
+            const sq = randItem(getEmptySquares());
+            emptySqResult.textContent = sq ? toNotation(sq.col, sq.row) : 'None found';
+        }),
+        emptySqResult,
+    ));
+
+    randomizerPanel.appendChild(randSeparator());
+
+    // --- 4. Random White Piece ---
+    const whitePieceResult = randResult();
+    randomizerPanel.appendChild(randRow(
+        'Random White Piece',
+        randBtn('Generate', () => {
+            const p = randItem(getAlivePieces('white'));
+            whitePieceResult.textContent = p ? `${p.label} (${p.notation})` : 'None found';
+        }),
+        whitePieceResult,
+    ));
+
+    // --- 5. Random Black Piece ---
+    const blackPieceResult = randResult();
+    randomizerPanel.appendChild(randRow(
+        'Random Black Piece',
+        randBtn('Generate', () => {
+            const p = randItem(getAlivePieces('black'));
+            blackPieceResult.textContent = p ? `${p.label} (${p.notation})` : 'None found';
+        }),
+        blackPieceResult,
+    ));
+
+    randomizerPanel.appendChild(randSeparator());
+
+    // --- 6-9. Random piece by type (Pawn, Rook, Knight, Bishop) ---
+    const pieceTypes = ['Pawn', 'Rook', 'Knight', 'Bishop'];
+    pieceTypes.forEach(type => {
+        const result = randResult();
+        randomizerPanel.appendChild(randRow(
+            `${type}`,
+            randBtn(`Random ${type}`, () => {
+                const p = randItem(getAlivePieces(null, type));
+                result.textContent = p ? `${p.label} (${p.notation})` : 'None found';
+            }),
+            randBtn(`White ${type}`, () => {
+                const p = randItem(getAlivePieces('white', type));
+                result.textContent = p ? `${p.label} (${p.notation})` : 'None found';
+            }),
+            randBtn(`Black ${type}`, () => {
+                const p = randItem(getAlivePieces('black', type));
+                result.textContent = p ? `${p.label} (${p.notation})` : 'None found';
+            }),
+            result,
+        ));
+    });
+};
+
+// =============================================================================
 // INITIALIZATION
 // =============================================================================
 
@@ -958,6 +1124,7 @@ initializePieces();
 renderSettingsPanel();
 renderPieces();
 renderBoardEffectsLayer();
+renderRandomizerPanel();
 zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);
 
 // Initialize server connection

@@ -429,13 +429,13 @@ body {
    ============================================================================= */
 
 .tools-section {
-    margin-top: 20px;
+    margin-top: 10px;
     background: 
         radial-gradient(ellipse 80% 50% at 50% 0%, rgba(129, 182, 76, 0.03) 0%, transparent 40%),
         linear-gradient(180deg, var(--panel-bg) 0%, rgba(33, 32, 29, 0.95) 100%);
     border: 2px solid var(--border);
     border-radius: 8px;
-    padding: 16px 20px;
+    padding: 3px;
     display: flex;
     flex-direction: horizontal;
     align-items: center;
@@ -485,12 +485,124 @@ body {
     margin-right: 8px;       /* spacing from label text */
 }
 
+
+/* =============================================================================
+   RANDOMIZER SECTION
+   ============================================================================= */
+
+.randomizer-section {
+    margin-top: 10px;
+    background: 
+        radial-gradient(ellipse 80% 50% at 50% 0%, rgba(129, 182, 76, 0.03) 0%, transparent 40%),
+        linear-gradient(180deg, var(--panel-bg) 0%, rgba(33, 32, 29, 0.95) 100%);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 90vw;
+    box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.randomizer-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.randomizer-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.randomizer-label {
+    font-size: 17px;
+    font-weight: 900;
+    color: var(--muted);
+    min-width: 10px;
+    white-space: nowrap;
+}
+
+.randomizer-btn {
+    background: linear-gradient(180deg, var(--card-bg) 0%, var(--bg-darker) 100%);
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    white-space: nowrap;
+}
+
+.randomizer-btn:hover {
+    background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dim) 100%);
+    border-color: var(--accent-strong);
+    color: #fff;
+    box-shadow: 
+        0 4px 12px rgba(0, 0, 0, 0.4),
+        0 0 15px rgba(129, 182, 76, 0.3);
+    transform: translateY(-1px);
+}
+
+.randomizer-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.randomizer-input {
+    background: linear-gradient(180deg, #2a2825 0%, #1e1d1b 100%);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    width: 60px;
+    text-align: center;
+    transition: border-color 0.2s ease;
+}
+
+.randomizer-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 8px rgba(129, 182, 76, 0.3);
+}
+
+.randomizer-result {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--gold);
+    padding: 4px 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    min-width: 80px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.randomizer-separator {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+}
+
 /* =============================================================================
    SETTINGS PANEL
    ============================================================================= */
 
 .settings-section {
-    margin-top: 20px;
+    margin-top: 10px;
     background: 
         radial-gradient(ellipse 80% 50% at 50% 0%, rgba(129, 182, 76, 0.03) 0%, transparent 40%),
         linear-gradient(180deg, var(--panel-bg) 0%, rgba(33, 32, 29, 0.95) 100%);
@@ -769,6 +881,7 @@ body {
 .piece-emoji-tr { top: 0;    right: 0;  }
 .piece-emoji-bl { bottom: 0; left: 0;   }
 .piece-emoji-br { bottom: 0; right: 0;  }
+
 
 /* =============================================================================
    BOARD EFFECT EMOJI OVERLAYS (per-square)
