@@ -1182,6 +1182,10 @@ const handleTurnUpdate = (data) => {
         turns.currentPlayer = newTurnState.currentPlayer;
         updateTitleVisuals(turns.currentPlayer, data.userId);
     };
+
+    // Update text showing when the next new rules are
+    const nextTurnWithNewRulesText = document.getElementById('next-turn-with-new-rules');
+    nextTurnWithNewRulesText.textContent = `New Rules In ${(newTurnState.nextTurnWithNewRules - newTurnState.currentTurn)} Turns`;
     
     // Update the Current Rule visuals
     const currentRulesEl = document.getElementById("current-rules-section");
@@ -1328,9 +1332,9 @@ passwordForm.addEventListener('submit', async (e) => {
 });
 
 // UNCOMMENT THIS TO REMOVE MODAL FOR TESTING
-// document.getElementById('password-modal').style.display = 'none';
-// clientSecret = 'dougdoug';
-// initializeApp();
+document.getElementById('password-modal').style.display = 'none';
+clientSecret = 'dougdoug';
+initializeApp();
 
 async function initializeApp() {
     // Initialize all client elements
