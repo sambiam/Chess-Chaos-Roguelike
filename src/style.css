@@ -101,6 +101,14 @@ body {
     color: #fff;
 }
 
+#password-error {
+    color: var(--danger);
+    font-size: clamp(0.5rem, 1.2vw, 1.2vw);
+    font-weight: 300;
+    line-height: 1;
+    font-style: italic;
+}
+
 
 /* =============================================================================
    PAGE LAYOUT

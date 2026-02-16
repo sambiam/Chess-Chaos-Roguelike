@@ -1,6 +1,5 @@
 /*
-THIS ENDPOINT PROCESSES A TURN BEING MADE (or undone)
-IT DOES NOT AFFECT THE CUSTOM RULES
+Manages the current turn info, current rules, and rule choices
 
 KEY: "rules:status"
 HASH: {
@@ -9,6 +8,7 @@ HASH: {
     currentPlayer: "white",
     currentRules: [],
     newRuleChoices: [],
+    justSelectedRule: true,
 }
 */
 
@@ -19,6 +19,7 @@ const STARTING_PLAYER = 'white';
 import {getNextRules} from './rules.js';
 import {redis} from './_lib/redis.js';
 import pusher from './_lib/pusher.js';
+import { checkPassword } from './auth.js';
 
 const REDIS_KEY = `rules:status`;
 
@@ -42,8 +43,11 @@ export default async function handler(req, res) {
         try {
             // Return the full hash of the board state
             const rawTurnState = await redis.hgetall(REDIS_KEY);
-            console.log("got raw board state", rawTurnState);
-            const newTurn = {newTurn: rawTurnState} // Sorta janky, but doing this to match the naming on the client
+            console.log("Here's the current Turn State from DB:", rawTurnState);
+            // Sorta janky, but doing this to match the Pusher naming convention for the client
+            // The alternative is to send ALL clients the board state via pusher but that feels wasteful
+            // fuck it we ball
+            const newTurn = {newTurn: rawTurnState} 
             return res.status(200).json({
                 success: true,
                 turnState: newTurn,
@@ -83,7 +87,7 @@ export default async function handler(req, res) {
 
             // First get the current turn state
             const currentTurnState = await redis.hgetall(REDIS_KEY);
-            console.log("got raw board state", currentTurnState);
+            console.log("got the turn state from DB", currentTurnState);
 
             switch (action) {
                 case 'RESET_TURNS':
@@ -274,7 +278,3 @@ async function handleRuleSelection(newTurn, payload) {
     await redis.hset(REDIS_KEY, stringifiedState);
 }
 
-function checkPassword(clientSecret) {
-    const vercelClientSecret = process.env.CHESS_SECRET;
-    return (clientSecret === vercelClientSecret);
-}

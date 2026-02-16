@@ -3,7 +3,7 @@ REDIS HASH (1 per app)
 
 KEY: "board:status"
 HASH: {
-    "1": "{captured: false, image: "White Rook 1.png", position: {"col": 0,"row": 7}",
+    "1": "{captured: false, image: "White Rook 1.png", position: {"col": 0,"row": 7}, emojis: []",
     "2": "{...}",
     "3": "{...}"",
     etc
@@ -15,6 +15,7 @@ So each each value is a stringify'ed JSON object, rather than an actual JSON obj
 
 import {redis} from './_lib/redis.js';
 import pusher from './_lib/pusher.js';
+import { checkPassword } from './auth.js';
 
 const REDIS_KEY = `board:status`;
 
@@ -38,7 +39,7 @@ export default async function handler(req, res) {
         try {
             // Return the full hash of the board state
             const rawBoardState = await redis.hgetall(REDIS_KEY);
-            console.log("got raw board state", rawBoardState);
+            console.log("Here's the current Board State from DB:", rawBoardState);
             // Send board state to the client
             return res.status(200).json({
                 success: true,
@@ -104,9 +105,4 @@ export default async function handler(req, res) {
         success: false,
         error: 'Method not allowed. Use GET to retrieve or POST to interact with the board.'
     });
-}
-
-function checkPassword(clientSecret) {
-    const vercelClientSecret = process.env.CHESS_SECRET;
-    return (clientSecret === vercelClientSecret);
 }
