@@ -70,7 +70,7 @@ export default async function handler(req, res) {
             //      Incrementing a turn
             //      Selecting a rule
             
-            const { clientSecret, action, payload } = req.body;
+            const { clientSecret, userId, action, payload } = req.body;
 
             // First check the client's password against the real password on Vercel
             if (!checkPassword(clientSecret)) {
@@ -98,13 +98,13 @@ export default async function handler(req, res) {
                         message: `Reset the turn state`,
                     });
                 case 'INCREMENT_TURN':
-                    await incrementTurn(currentTurnState);
+                    await incrementTurn(currentTurnState, userId);
                     return res.status(200).json({
                         success: true,
                         message: `New turns successfully processed`,
                     });
                 case 'SELECT_RULE':
-                    await handleRuleSelection(currentTurnState, payload);
+                    await handleRuleSelection(currentTurnState, userId, payload);
                     return res.status(200).json({
                         success: true,
                         message: `Successfully selected a new rule!`,
@@ -184,7 +184,7 @@ async function resetTurns() {
     // Trigger Pusher event to tell all clients that new rule choices are live
     const CHANNEL_NAME = 'chess-events';
     const EVENT_TYPE_TURN_UPDATE = 'turn-event';
-    await pusher.trigger(CHANNEL_NAME, EVENT_TYPE_TURN_UPDATE, {newTurn: newTurn});
+    await pusher.trigger(CHANNEL_NAME, EVENT_TYPE_TURN_UPDATE, {newTurn});
     console.log(`Triggered Pusher event for Channel:${CHANNEL_NAME} and EventType:${EVENT_TYPE_TURN_UPDATE}`);
 
     // Now, we write all the data back to the DB
@@ -195,7 +195,7 @@ async function resetTurns() {
     await redis.hset(REDIS_KEY, stringifiedState); // Update the DB
 }
 
-async function incrementTurn(currentTurn) {
+async function incrementTurn(currentTurn, userId) {
 
     console.log("We're incrementing a turn! Here's currentTurn", currentTurn);
 
@@ -237,7 +237,7 @@ async function incrementTurn(currentTurn) {
     // Trigger Pusher event to tell all clients that new rule choices are live
     const CHANNEL_NAME = 'chess-events';
     const EVENT_TYPE_TURN_UPDATE = 'turn-event';
-    await pusher.trigger(CHANNEL_NAME, EVENT_TYPE_TURN_UPDATE, {newTurn});
+    await pusher.trigger(CHANNEL_NAME, EVENT_TYPE_TURN_UPDATE, {newTurn, userId});
     console.log(`Triggered Pusher event for Channel:${CHANNEL_NAME} and EventType:${EVENT_TYPE_TURN_UPDATE}`);
 
     // Finally, write the new turn state data back to the DB
@@ -248,7 +248,7 @@ async function incrementTurn(currentTurn) {
     await redis.hset(REDIS_KEY, stringifiedState);
 }
 
-async function handleRuleSelection(newTurn, payload) {
+async function handleRuleSelection(newTurn, userId, payload) {
 
     // Grab the chosen rule
     console.log("We're handling rule selection! Here's our payload", payload);
@@ -267,7 +267,7 @@ async function handleRuleSelection(newTurn, payload) {
     // Trigger Pusher event so that clients update with the new rules
     const CHANNEL_NAME = 'chess-events';
     const EVENT_TYPE_TURN_UPDATE = 'turn-event';
-    await pusher.trigger(CHANNEL_NAME, EVENT_TYPE_TURN_UPDATE, {newTurn});
+    await pusher.trigger(CHANNEL_NAME, EVENT_TYPE_TURN_UPDATE, {newTurn, userId});
     console.log(`Triggered Pusher event for Channel:${CHANNEL_NAME} and EventType:${EVENT_TYPE_TURN_UPDATE}`);
 
     // Finally, write the new turn state data back to the DB

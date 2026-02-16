@@ -75,7 +75,7 @@ body {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
-#password-form label {
+#password-label {
     font-size: clamp(0.5rem, 1.5vw, 1.5vw);
     font-weight: 800;
     line-height: 1.15;
@@ -103,8 +103,8 @@ body {
 
 #password-error {
     color: var(--danger);
-    font-size: clamp(0.5rem, 1.2vw, 1.2vw);
-    font-weight: 300;
+    font-size: clamp(0.5rem, .7vw, 1.2vw);
+    font-weight: 600;
     line-height: 1;
     font-style: italic;
 }
@@ -119,7 +119,7 @@ body {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
     padding: 12px;
     padding-left: 5vw;
     padding-right: 5vw;
@@ -136,27 +136,53 @@ body {
    TITLE
    ============================================================================= */
 
+.title-wrapper {
+    perspective: 1000px;
+}
+
 .title-card {
-    display: flex;
-    flex-wrap: nowrap;
-    justify-content: center;
     min-width: 25vw;
+    min-height: 3.4vw;
     padding: 8px 24px;
     
-    font-size: clamp(1rem, 3vw, 10vw);
+    font-size: clamp(1rem, 2.8vw, 9vw);
     font-weight: 800;
     line-height: 1.15;
-    text-align: center;
-    
     border-radius: 6px;
     box-shadow: 
         0 4px 12px rgba(0, 0, 0, 0.4),
         0 0 20px rgba(129, 182, 76, 0.08),
         inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 0.6s ease;
 }
 
-.title-card.white-turn {
+.title-card.flip {
+    transform: rotateY(180deg);
+}
+
+.card-face {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    -webkit-backface-visibility: hidden; /* helps in some browsers */
+    backface-visibility: hidden;
+    border-radius: 6px;
+}
+
+.card-front { 
+    transform: translateZ(0.1px); 
+}
+
+/* Back side starts rotated */
+.card-back {
+    transform: rotateY(180deg) translateZ(0.1px);
+}
+
+.card-face.white-turn {
     background: 
         linear-gradient(135deg, rgba(255,255,255,0.4) 0%, transparent 50%),
         linear-gradient(180deg, #ffffff 0%, #f0f0f0 30%, #e0e0e0 70%, #d5d5d5 100%);
@@ -165,7 +191,7 @@ body {
     text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
-.title-card.black-turn {
+.card-face.black-turn {
     background: 
         linear-gradient(135deg, rgba(255,255,255,0.08) 0%, transparent 50%),
         linear-gradient(180deg, #4a4744 0%, #3d3a37 30%, #2d2b28 70%, #222120 100%);
@@ -462,7 +488,7 @@ body {
     background-repeat: no-repeat;
     background-position: center;
     filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.6));
-    transition: left 0.15s ease, top 0.15s ease, filter 0.2s ease;
+    transition: left 0.25s ease, top 0.25s ease, filter 0.2s ease;
     pointer-events: none;
 }
 

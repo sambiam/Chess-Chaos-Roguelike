@@ -497,7 +497,7 @@ resetButton.addEventListener('click', async () => {
     // Send a board update event to server
     await apiPost('/api/board-state', {clientSecret: clientSecret, userId: getUserId(), newState: getSimpleBoardState()});
     // Tell server to reset turn send
-    await apiPost('/api/turns', {clientSecret: clientSecret, action: 'RESET_TURNS',});
+    await apiPost('/api/turns', {clientSecret: clientSecret, userId: getUserId(), action: 'RESET_TURNS',});
 });
 
 // Settings panel: handle image dropdown changes
@@ -1027,6 +1027,11 @@ const handleClientMove = async (slot, targetCol, targetRow) => {
     // Visually deselect it, now that it's moved
     handleDeselectPiece();
 
+    // We want the client visuals to update immediately rather than waiting on server
+    // So we update the visuals locally, and then pass userId so this doesn't run again when we get the pusher notif
+    turns.currentPlayer = (turns.currentPlayer === "white") ? "black" : "white";
+    updateTitleVisuals(turns.currentPlayer);
+
     // Send entire simple board state to server
     // Makes it easier for the server to maintain a single source of truth at all times, rather than just move diffs
     // Include clientSecret for authentication, include userId for receiving clients
@@ -1037,14 +1042,15 @@ const handleClientMove = async (slot, targetCol, targetRow) => {
     }
     console.log("Posted new board state to the server", response)
 
-    // Tell server to process a turn
+    // If the Ignore Turns checkbox is checked, the board state updates, but the turn counter should not
     if (document.getElementById('ignore-turns-checkbox').checked) {
         console.log("Skipping turn processing because the Ignore Turns checkbox is checked");
-    } else {
-        response = await apiPost('/api/turns', {clientSecret: clientSecret, action: 'INCREMENT_TURN',});
-        if (!response.success) {
-            console.log("Failed to update Turn State on server. Message: ", response.message);
-        }
+        return;
+    }
+    // Everything's good! Tell server to process a turn
+    response = await apiPost('/api/turns', {clientSecret: clientSecret, userId: getUserId(), action: 'INCREMENT_TURN',});
+    if (!response.success) {
+        console.log("Failed to update Turn State on server. Message: ", response.message);
     }
 };
 
@@ -1062,7 +1068,7 @@ const pullServerBoardState = async () => {
 }
 
 const pullServerTurnState = async () => {
-    const result = await apiGet('/api/turns', {clientSecret: clientSecret});
+    const result = await apiGet('/api/turns', {clientSecret: clientSecret, userId: getUserId()});
     if (!result.success) {
         console.log("Failed to pull turn state from the server");
         return;
@@ -1160,7 +1166,6 @@ const syncBoardWithServer = (newState) => {
     }
 };
 
-
 // Process a rules event from the server
 const handleTurnUpdate = (data) => {
 
@@ -1168,22 +1173,16 @@ const handleTurnUpdate = (data) => {
     const newTurnState = data.newTurn;
 
     turns.currentTurn = newTurnState.currentTurn;
-    turns.currentPlayer = newTurnState.currentPlayer;
     turns.currentRules = newTurnState.currentRules;
     turns.newRuleChoices = newTurnState.newRuleChoices;
 
-    // Update the Title visuals
-    const titleCard = document.getElementById('title-card');
-    if (turns.currentPlayer === 'white') {
-        titleCard.textContent = 'White Turn';
-        titleCard.classList.remove('black-turn');
-        titleCard.classList.add('white-turn');
-    } else {
-        titleCard.textContent = 'Black Turn';
-        titleCard.classList.remove('white-turn');
-        titleCard.classList.add('black-turn');
-    }
-
+    // Only update visuals if the player actually changed
+    // Prevents the Title flip animation from playing after a rule choice
+    if (turns.currentPlayer !== newTurnState.currentPlayer) {
+        turns.currentPlayer = newTurnState.currentPlayer;
+        updateTitleVisuals(turns.currentPlayer, data.userId);
+    };
+    
     // Update the Current Rule visuals
     const currentRulesEl = document.getElementById("current-rules-section");
     currentRulesEl.innerHTML = ""; // EXECUTE ORDER 67 - KILL THE YOUNGLINGS
@@ -1203,9 +1202,7 @@ const handleTurnUpdate = (data) => {
 
     // If a rule was just selected, lets do a 1-time reset to the "default" visual state
     if (newTurnState.justSelectedRule) {
-        document.getElementById('viewport').classList.remove("choices-mode");
-        document.getElementById('new-rules').classList.add("hidden");
-        zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);         
+        closeNewRuleVisuals(data.userId);
     }
 
     if (turns.newRuleChoices.length > 0) {
@@ -1246,10 +1243,16 @@ const handleTurnUpdate = (data) => {
             }            
             newRuleCard.append(nextDuration);
             newRuleCard.addEventListener('click', async () => {
-                // We clicked a new rule! Send the selected rule to the server
+                // We clicked a new rule! 
+
+                // First we update visual state on the client, just to make things feel responsive
+                closeNewRuleVisuals();
+
+                // Now we send the selected rule to the server
                 if (turns.newRuleChoices) {
                     await apiPost('/api/turns', {
                         clientSecret: clientSecret,
+                        userId: getUserId(),
                         action: 'SELECT_RULE',
                         payload: {
                             chosenIndex: turns.newRuleChoices.indexOf(nextRule),
@@ -1261,6 +1264,46 @@ const handleTurnUpdate = (data) => {
         }
     }    
 };
+
+// Update the Title visuals
+// We only update visuals if this request came from another user (i.e. someone with a different userId)
+function updateTitleVisuals(currentPlayer, userId = "") {
+    if (userId === getUserId()) {
+        console.log("We were the ones who initated the turn event, so don't update the title")
+        return;
+    }
+
+    const titleCard = document.getElementById('title-card');
+    const front = titleCard.querySelector('.card-front');
+    const back = titleCard.querySelector('.card-back');
+
+    // Determine which face is currently visible
+    const isWhiteTurn = currentPlayer === 'white';
+    const isFlipped = titleCard.classList.contains("flip");
+    const hiddenFace = isFlipped ? front : back;
+
+    // Update the hidden face before flipping
+    hiddenFace.textContent = isWhiteTurn ? "White Turn" : "Black Turn";
+    hiddenFace.classList.remove("white-turn", "black-turn");
+    hiddenFace.classList.add(isWhiteTurn ? "white-turn" : "black-turn");
+
+    // Flip
+    requestAnimationFrame(() => {
+        titleCard.classList.toggle("flip");
+    });
+}
+
+// This will close the New Rules panel and revert to the default state
+// We only update the visuals if this request came from another user (i.e. someone with a different userId)
+function closeNewRuleVisuals(userId = "") {
+    if (userId === getUserId()) {
+        console.log("We were the ones who initated the rule choice, so we are ignoring this event")
+        return;
+    }
+    document.getElementById('viewport').classList.remove("choices-mode");
+    document.getElementById('new-rules').classList.add("hidden");
+    zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);         
+}
 
 // =============================================================================
 // INITIALIZATION
