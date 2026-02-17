@@ -26,7 +26,7 @@ const ALL_POSSIBLE_RULES = {
     },
     blood_for_the_pawn_god: {
         title: "Blood for the Pawn God",
-        description: "Two random Pieces are killed",
+        description: "Three random Pawns are killed",
         isInstant: true,
     },
     born_again_christian: {
@@ -61,17 +61,12 @@ const ALL_POSSIBLE_RULES = {
     },
     drafted_for_battle: {
         title: "Drafted for Battle",
-        description: "Both Player's Kings swap with a Bishop or Knight of their choice",
-        isInstant: true,
-    },
-    blood_sacrifice: {
-        title: "Blood Sacrifice",
-        description: "Players pick one of their own pieces to die after every turn",
+        description: "Both Player's Kings swap places with a Bishop or Knight of their choice",
         isInstant: true,
     },
     hot_drop: {
         title: "Hot Drop",
-        description: "Each Player gets a Queen in a random open spuare",
+        description: "Each Player gets a Queen in a random open square (can't attack King this turn)",
         isInstant: true,
     },
     minefield: {
@@ -94,11 +89,24 @@ const ALL_POSSIBLE_RULES = {
         description: "All your Pieces move one square towards the enemy (if open)",
         isInstant: true,
     },
+    permanent_quarantine: {
+        title: "Permanent Quarantine",
+        description: "2 random empty squares cannot be entered or crossed for the rest of the game",
+        isInstant: true,
+    },
     
     // =============================================
     //               ALL TIMED
     // =============================================
   
+    blood_sacrifice: {
+        title: "Blood Sacrifice",
+        description: "Players pick one of their own pieces to die after every turn",
+        isInstant: false,
+        minTurns: 3,
+        maxTurns: 5,
+    },
+    
     second_chance: {
         title: "Second Chance",
         description: "Captured Pieces revive at their starting square (if open)",
@@ -155,13 +163,6 @@ const ALL_POSSIBLE_RULES = {
         minTurns: 3,
         maxTurns: 9,
     },
-    double_strike: {
-        title: "Double Strike",
-        description: "Each Player gets two moves per turn",
-        isInstant: false,
-        minTurns: 3,
-        maxTurns: 9,
-    },
     off_limits: {
         title: "Off Limits",
         description: "3 random empty squares cannot be entered or crossed",
@@ -171,7 +172,7 @@ const ALL_POSSIBLE_RULES = {
     },
     portal_3: {
         title: "Portal 3",
-        description: "Two random Pieces swap places at the end of every turn",
+        description: "Two random non-King Pieces swap places at the end of every turn",
         isInstant: false,
         minTurns: 3,
         maxTurns: 9,
@@ -248,7 +249,7 @@ const ALL_POSSIBLE_RULES = {
     },
     all_on_red: {
         title: "All on Red",
-        description: "Every move, flip a coin. If it's tails you lose your turn",
+        description: "Every move, flip a coin. If it's tails you lose your turn (unless you're in check)",
         isInstant: false,
         minTurns: 3,
         maxTurns: 9,
@@ -276,7 +277,7 @@ const ALL_POSSIBLE_RULES = {
     },
     pacman_style: {
         title: "Pacman Style",
-        description: "Pieces can wrap around sides of the board",
+        description: "Pieces can wrap around the right and left sides of the board",
         isInstant: false,
         minTurns: 3,
         maxTurns: 9,
@@ -290,7 +291,7 @@ const ALL_POSSIBLE_RULES = {
     },
     tornado: {
         title: "Tornado",
-        description: "Pick a random square, if any Piece *can* move to that square, it must. Friendly fire on.",
+        description: "Pick a random square, if any Piece *can* move to that square, it must.",
         isInstant: false,
         minTurns: 3,
         maxTurns: 9,
@@ -304,7 +305,7 @@ const ALL_POSSIBLE_RULES = {
     },
     time_bomb: {
         title: "Time Bomb",
-        description: "All Pieces in Column 5 die when this rule expires",
+        description: "All Pieces in Column E die when this rule expires",
         isInstant: false,
         minTurns: 3,
         maxTurns: 9,
@@ -332,7 +333,7 @@ const ALL_POSSIBLE_RULES = {
     },
     crtical_strike: {
         title: "Critical Strike",
-        description: "Every capture has a 50% chance to capture a random adjacent Piece",
+        description: "Every capture has a 50% chance to capture a random adjacent enemy Piece",
         isInstant: false,
         minTurns: 3,
         maxTurns: 9,
@@ -348,6 +349,8 @@ const ALL_POSSIBLE_RULES = {
         title: "Invulnerability Potion",
         description: "Two random Pieces on your team cannot die",
         isInstant: true,
+        minTurns: 3,
+        maxTurns: 8,
     },
 
 

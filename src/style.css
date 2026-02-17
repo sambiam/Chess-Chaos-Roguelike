@@ -802,9 +802,7 @@ body {
     transition: all 0.2s ease;
 }
 
-.piece-controls.captured .revive-btn {
-    display: block;
-}
+/* Revive button visibility is controlled by JS (shown only when origin spot is empty) */
 
 .revive-btn:hover {
     background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dim) 100%);
@@ -851,6 +849,10 @@ body {
     color: var(--ink);
     cursor: pointer;
     transition: all 0.2s ease;
+}
+
+.piece-controls select option {
+    color: #000;
 }
 
 .piece-controls select:hover {
@@ -1021,8 +1023,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 64px;
-    opacity: 0.45;
+    font-size: 72px;
+    opacity: 0.5;
     pointer-events: none;
 }
 

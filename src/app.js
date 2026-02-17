@@ -98,6 +98,19 @@ const updatePieceCaptureState = piece => {
     }
 };
 
+// Shows the revive button only when the piece is captured AND its origin spot is empty
+const updateReviveButton = piece => {
+    if (!piece.reviveBtn) return;
+    const canRevive = piece.captured &&
+        !getPieceAt(piece.initialPosition.col, piece.initialPosition.row);
+    piece.reviveBtn.style.display = canRevive ? 'block' : 'none';
+};
+
+// Refreshes all revive buttons (any move/capture can block or unblock an origin spot)
+const refreshAllReviveButtons = () => {
+    Object.values(state.pieces).forEach(updateReviveButton);
+};
+
 // Updates the notation display in the settings panel
 const updatePieceNotation = piece => {
     if (piece.positionTag) {
@@ -187,11 +200,7 @@ const renderSettingsPanel = () => {
         reviveBtn.textContent = 'Revive';
         reviveBtn.addEventListener('click', async () => {
             const result = revivePiece(piece);
-            if (!result) return;
-            if (result.blocked) {
-                alert(`Cannot revive ${piece.label} because ${result.blockerLabel} is in the way!`);
-                return;
-            }
+            if (!result || result.blocked) return;
             // Update all visuals for the revived piece
             updatePieceCaptureState(piece);
             updatePiecePosition(piece);
@@ -199,6 +208,7 @@ const renderSettingsPanel = () => {
             updatePieceImage(piece);
             updatePieceEmojis(piece);
             if (piece.imageSelect) piece.imageSelect.value = piece.image;
+            refreshAllReviveButtons();
             // Send board state to server (NOT a turn)
             await apiPost('/api/board-state', {
                 clientSecret: clientSecret,
@@ -211,6 +221,7 @@ const renderSettingsPanel = () => {
         // Store DOM references on the piece object (view layer properties)
         piece.positionTag = notationTag;
         piece.imageSelect = imageSelect;
+        piece.reviveBtn = reviveBtn;
         piece.settingsCard = card;
         
         // Add them in order to match the visual layout of a chess board
@@ -252,6 +263,7 @@ const renderPieces = () => {
 
     piecesLayer.innerHTML = '';
     piecesLayer.appendChild(fragment);
+    refreshAllReviveButtons();
 };
 
 // =============================================================================
@@ -422,6 +434,7 @@ const handleResetBoard = () => {
             piece.imageSelect.value = piece.image; // Reset dropdown to initial image
         }
     });
+    refreshAllReviveButtons();
     // Clear all board effect visuals (resetBoard already cleared state.boardEffects)
     for (let row = 0; row < 8; row++) {
         for (let col = 0; col < 8; col++) {
@@ -815,6 +828,7 @@ const showContextMenu = (clientX, clientY, square, piece) => {
         capturePiece(piece);
         updatePieceCaptureState(piece);
         updatePieceEmojis(piece);
+        refreshAllReviveButtons();
         handleDeselectPiece();
         await apiPost('/api/board-state', {
             clientSecret: clientSecret,
@@ -1036,13 +1050,18 @@ const handleClientMove = async (slot, targetCol, targetRow) => {
         playCaptureSounds();
     }
 
+    refreshAllReviveButtons();
+
     // Visually deselect it, now that it's moved
     handleDeselectPiece();
 
     // We want the client visuals to update immediately rather than waiting on server
     // So we update the visuals locally, and then pass userId so this doesn't run again when we get the pusher notif
-    turns.currentPlayer = (turns.currentPlayer === "white") ? "black" : "white";
-    updateTitleVisuals(turns.currentPlayer);
+    const ignoreTurns = document.getElementById('ignore-turns-checkbox').checked;
+    if (!ignoreTurns) {
+        turns.currentPlayer = (turns.currentPlayer === "white") ? "black" : "white";
+        updateTitleVisuals(turns.currentPlayer);
+    }
 
     // Send entire simple board state to server
     // Makes it easier for the server to maintain a single source of truth at all times, rather than just move diffs
@@ -1055,7 +1074,7 @@ const handleClientMove = async (slot, targetCol, targetRow) => {
     console.log("Posted new board state to the server", response)
 
     // If the Ignore Turns checkbox is checked, the board state updates, but the turn counter should not
-    if (document.getElementById('ignore-turns-checkbox').checked) {
+    if (ignoreTurns) {
         console.log("Skipping turn processing because the Ignore Turns checkbox is checked");
         return;
     }
@@ -1120,6 +1139,7 @@ const syncBoardWithServer = (newState) => {
             etc
         }
     */
+   let playedCaptureSound = false;
     for (const [slot, newPiece] of Object.entries(newState)) {
         if (slot === 'boardEffects' || slot === 'highlightedSquare') continue; // Handled separately below
         const currentPiece = state.pieces[Number(slot)];
@@ -1139,6 +1159,10 @@ const syncBoardWithServer = (newState) => {
         if (currentPiece.captured !== newPiece.captured) {
             currentPiece.captured = newPiece.captured;
             updatePieceCaptureState(currentPiece);
+            if (!playedCaptureSound) {
+                playCaptureSounds();
+                playCaptureSounds = true;
+            }
         }
         // Sync emoji statuses (compare arrays by content)
         const serverEmojis = newPiece.emojis || [];
@@ -1149,6 +1173,8 @@ const syncBoardWithServer = (newState) => {
             updatePieceEmojis(currentPiece);
         }
     }
+
+    refreshAllReviveButtons();
 
     // Sync board effects
     if (newState.boardEffects) {
@@ -1279,6 +1305,11 @@ const handleTurnUpdate = (data) => {
             newRuleCard.append(nextDuration);
             newRuleCard.addEventListener('click', async () => {
                 // We clicked a new rule! 
+
+                // First, if ignore turns is checked, ignore this. Player ideally wouldn't do this but just in case
+                if (document.getElementById('ignore-turns-checkbox').checked) {
+                    return;
+                }
 
                 // First we update visual state on the client, just to make things feel responsive
                 closeNewRuleVisuals();
