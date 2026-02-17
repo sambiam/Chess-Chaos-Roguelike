@@ -408,7 +408,7 @@ body {
     flex-wrap: wrap;
     justify-content: center;
     align-content: center;
-    padding: 12px 8px;
+    padding: 8px 30px;
 
     /* Will swap to red border color during New Rules state */
     border: 3px solid var(--accent);

@@ -38,6 +38,7 @@ export const BOARD_EFFECT_OPTIONS = [
     { name: 'misc_2',    emoji: '💀' },
     { name: 'misc_3',    emoji: '❄️' },
     { name: 'misc_4',    emoji: '🔀' },
+    { name: 'misc_5',    emoji: '🌪️' },
 ];
 
 export const BOARD_EFFECT_EMOJI_MAP = Object.fromEntries(
