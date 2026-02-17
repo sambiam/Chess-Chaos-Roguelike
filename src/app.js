@@ -30,6 +30,11 @@ import {
 import {
     turns
 } from './turns.js';
+import {
+    startBackground,
+    stopBackground,
+    startPageBackground,
+} from './animated-bg.js';
 
 // =============================================================================
 // CONSTANTS
@@ -45,6 +50,12 @@ const ZOOM_SCROLL_MULTIPLIER = 0.7;  // Lower = slower zoom, higher = faster
 // TODO - this will be set by the user when opening app
 // This is sent with all server requests to ensure authentication
 let clientSecret = '';
+
+// =============================================================================
+// CLIENT STATE TRACKERS
+// =============================================================================
+
+let currentlyHaveRules = false;
 
 // =============================================================================
 // DOM REFERENCES
@@ -494,6 +505,7 @@ resetButton.addEventListener('click', async () => {
     handleResetBoard();
     zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);
     zoomPan.resetInteractionState();
+    currentlyHaveRules = false;
     // Send a board update event to server
     await apiPost('/api/board-state', {clientSecret: clientSecret, userId: getUserId(), newState: getSimpleBoardState()});
     // Tell server to reset turn send
@@ -1184,25 +1196,44 @@ const handleTurnUpdate = (data) => {
     };
 
     // Update text showing when the next new rules are
-    const nextTurnWithNewRulesText = document.getElementById('next-turn-with-new-rules');
-    nextTurnWithNewRulesText.textContent = `New Rules In ${(newTurnState.nextTurnWithNewRules - newTurnState.currentTurn)} Turns`;
+    const nextNewRulesText = document.getElementById('next-turn-with-new-rules');
+    nextNewRulesText.textContent = `New Rules In ${(newTurnState.nextTurnWithNewRules - newTurnState.currentTurn)} Turns`;
     
     // Update the Current Rule visuals
+    const gameSectionEl = document.getElementById('game-section');
     const currentRulesEl = document.getElementById("current-rules-section");
     currentRulesEl.innerHTML = ""; // EXECUTE ORDER 67 - KILL THE YOUNGLINGS
-    for (const nextRule of turns.currentRules) {
-        const newRuleEl = document.createElement('div');
-        newRuleEl.classList.add('current-rule-card');
-        const nextDescription = document.createElement('p');
-        nextDescription.classList.add('current-rule-description');
-        nextDescription.textContent = nextRule.description;
-        newRuleEl.append(nextDescription)
-        const nextDuration = document.createElement('p');
-        nextDuration.classList.add('current-rule-duration');
-        nextDuration.textContent = `Turns Left: ${nextRule.turnsLeft}`;
-        newRuleEl.append(nextDuration);
-        currentRulesEl.append(newRuleEl);
+    if (turns.currentRules.length === 0) {
+        // No Current Rules! Let the board be taller
+        gameSectionEl.classList.remove('squashed');
+        // If we just now removed the rules, center the board for the player for convenience
+        if (currentlyHaveRules) {
+            zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);
+            currentlyHaveRules = false;
+        }
+    } else {
+        // We've got current rules! Squash the board, then create the elements
+        gameSectionEl.classList.add('squashed');
+        if (!currentlyHaveRules) {
+            // If we just got some rules, center the board for the player for convenience
+            zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);
+            currentlyHaveRules = true;
+        }
+        for (const nextRule of turns.currentRules) {
+            const newRuleEl = document.createElement('div');
+            newRuleEl.classList.add('current-rule-card');
+            const nextDescription = document.createElement('p');
+            nextDescription.classList.add('current-rule-description');
+            nextDescription.textContent = nextRule.description;
+            newRuleEl.append(nextDescription)
+            const nextDuration = document.createElement('p');
+            nextDuration.classList.add('current-rule-duration');
+            nextDuration.textContent = `Turns Left: ${nextRule.turnsLeft}`;
+            newRuleEl.append(nextDuration);
+            currentRulesEl.append(newRuleEl);
+        }
     }
+    
 
     // If a rule was just selected, lets do a 1-time reset to the "default" visual state
     if (newTurnState.justSelectedRule) {
@@ -1214,14 +1245,10 @@ const handleTurnUpdate = (data) => {
         // Change visual state to choices mode
         document.getElementById('viewport').classList.add("choices-mode");
         const newRulesEl = document.getElementById('new-rules');
+        stopBackground();
         newRulesEl.innerHTML = '';
         newRulesEl.classList.remove("hidden");
         zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);  
-
-        const MAKEYOURCHOICE = document.createElement('p');
-        MAKEYOURCHOICE.classList.add('new-rule-duration');
-        MAKEYOURCHOICE.textContent = "MAKE YOUR CHOICE";
-        newRulesEl.append(MAKEYOURCHOICE);
 
         // Now create the New Rules panel
         for (const nextRule of turns.newRuleChoices) {
@@ -1232,6 +1259,10 @@ const handleTurnUpdate = (data) => {
             nextTitle.classList.add('new-rule-title');
             nextTitle.textContent = nextRule.title;
             newRuleCard.append(nextTitle);
+
+            const sep = document.createElement('div');
+            sep.className = 'new-rules-separator';
+            newRuleCard.append(sep);
 
             const nextDescription = document.createElement('p');
             nextDescription.classList.add('new-rule-description');
@@ -1266,6 +1297,8 @@ const handleTurnUpdate = (data) => {
             });
             newRulesEl.append(newRuleCard);
         }
+
+        startBackground(newRulesEl);
     }    
 };
 
@@ -1304,6 +1337,7 @@ function closeNewRuleVisuals(userId = "") {
         console.log("We were the ones who initated the rule choice, so we are ignoring this event")
         return;
     }
+    stopBackground();
     document.getElementById('viewport').classList.remove("choices-mode");
     document.getElementById('new-rules').classList.add("hidden");
     zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);         
@@ -1344,6 +1378,9 @@ async function initializeApp() {
     renderBoardEffectsLayer();
     renderRandomizerPanel();
     zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);
+
+    // Start page-level animated background
+    startPageBackground(document.body);
 
     // Initialize server connection
     initializePusher();

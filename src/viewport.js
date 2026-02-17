@@ -99,7 +99,7 @@ export function createZoomPan(viewport, stage, { zoomMultiplier = 0.7, contentSi
         const scaleToFitWidth = (rect.width - padding) / contentWidth;
         const scaleToFitHeight = (rect.height - padding) / contentHeight;
         // Use the smaller scale to ensure content fits in both dimensions
-        const fitScale = Math.min(scaleToFitWidth, scaleToFitHeight, 1); // Don't zoom in past 100%
+        const fitScale = Math.min(scaleToFitWidth, scaleToFitHeight, 1.1); // Doug: if we want to prevent zooming in past 100%, set the value at 1
         const clampedScale = clamp(fitScale, MIN_SCALE, MAX_SCALE);
         
         // Set the scale and center the content

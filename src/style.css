@@ -37,6 +37,8 @@
 
 body {
     margin: 0;
+    position: relative;
+    isolation: isolate;
     background: 
         radial-gradient(ellipse 80% 50% at 50% 0%, rgba(129, 182, 76, 0.08) 0%, transparent 50%),
         radial-gradient(ellipse 60% 40% at 80% 20%, rgba(98, 153, 36, 0.05) 0%, transparent 40%),
@@ -119,7 +121,7 @@ body {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
     padding: 12px;
     padding-left: 5vw;
     padding-right: 5vw;
@@ -144,6 +146,8 @@ body {
     min-width: 25vw;
     min-height: 3.4vw;
     padding: 8px 24px;
+    margin-top:5px;
+    margin-bottom: 5px;
     
     font-size: clamp(1rem, 2.8vw, 9vw);
     font-weight: 800;
@@ -204,22 +208,23 @@ body {
    GAME SECTION - VIEWPORT & NEW RULES
    ============================================================================= */
 
-
 .game-section {
     display:flex;
     align-items: center;
     justify-content: center;
-    /* gap:1.5vw; */
     gap:1.5%;
     width: 90vw;
+    height: 87vh;
+}
+
+.game-section.squashed {
+    height: 80vh;
 }
 
 .viewport {
     position: relative;
-    /* width: 90vw; */
     width: 100%;
-    /* transition: width 300ms ease; */
-    height: 77vh;
+    height: 100%;
     background: 
         radial-gradient(ellipse 100% 80% at 50% 0%, rgba(129, 182, 76, 0.04) 0%, transparent 40%),
         radial-gradient(ellipse 80% 60% at 100% 100%, rgba(0, 0, 0, 0.25) 0%, transparent 50%),
@@ -241,7 +246,6 @@ body {
 }
 
 .viewport.choices-mode {
-    /* width: 60vw; */
     width: 70%;
 }
 
@@ -264,10 +268,10 @@ body {
 }
 
 .new-rules {
-    /* width: 28.5vw; */
-    /* transition: width 300ms ease; */
     width: 28.5%;
-    height: 77vh;
+    height: 100%;
+    position: relative;
+    isolation: isolate;
     background: 
         radial-gradient(ellipse 100% 80% at 50% 0%, rgba(129, 182, 76, 0.04) 0%, transparent 40%),
         radial-gradient(ellipse 80% 60% at 100% 100%, rgba(0, 0, 0, 0.25) 0%, transparent 50%),
@@ -291,85 +295,95 @@ body {
     justify-content: center;
     align-items: center;
     gap: 40px;
-    /* padding: 12px; */
+}
+
+.new-rules-bg {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    overflow: hidden;
+    border-radius: 6px;
+    opacity: 50%;
 }
 
 .new-rules.hidden {
-    /* width: 0vw; */
     display: none;
 }
 
 .new-rule-card {
     display:flex;
     flex-direction: column;
-    flex-wrap: wrap;
     justify-content: center;
-    align-content: center;
-    padding: 12px 8px;
+    align-items: center;
+    padding-top: 0px;
+    padding-bottom: 5px;
+    padding-left: 5px;
+    padding-right: 5px;
 
-    /* Will swap to red border color during New Rules state */
     border: 3px solid #ffffff;
     border-radius: 6px;
     box-shadow: 
-        0 4px 12px rgba(196, 39, 39, 0.4),
+        0 4px 12px rgba(255, 232, 232, 0.4),
         0 0 20px rgba(182, 76, 76, 0.15),
         inset 0 1px 0 rgba(255, 255, 255, 0.08);
     background: 
-        radial-gradient(ellipse 120% 80% at 50% 40%, rgba(153, 76, 76, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse 120% 80% at 50% 40%, rgba(100, 159, 114, 0.12) 0%, transparent 50%),
         linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 10%),
         linear-gradient(180deg, #2f2a2a 0%, #262222 35%, #1f1b1b 75%, #1a1616 100%);
-
     flex: 1 1 0;
-    min-height: 100px;
-    max-height: 190px;
+    min-height: 80px;
+    max-height: 25%;
     width:70%;
     transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.3s ease;
+    padding-right: 0.7em;
+    padding-left: 0.7em;
 }
 
 .new-rule-card:hover {
-    transform: translateY(-2px);
+    transform: translateY(-5px);
     box-shadow: 
-        0 6px 20px rgba(0, 0, 0, 0.5),
-        0 0 30px rgba(182, 76, 76, 0.25),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    /* border-color: var(--accent-strong); */
-    border-color: #800000;
-    background: 
-        radial-gradient(ellipse 120% 80% at 50% 40%, rgba(182, 76, 76, 0.12) 0%, transparent 50%),
-        linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 10%),
-        linear-gradient(180deg, #2f2d2a 0%, #262422 35%, #1f1d1b 75%, #1a1816 100%);
+        0 4px 17px rgba(96, 255, 71, 0.8),
+        0 0 20px rgba(182, 76, 76, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .new-rule-card p {
     margin:0;
     text-align: center;
-    line-height: 1.2;
 }
 
 .new-rule-title {
-    color: var(--ink);
-    font-size: 1.7em;
+    color: var(--accent-strong);
+    font-size: clamp(1rem, 1.7vw, 2vw);
     font-weight: 700;
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .new-rule-description {
-    /* color: var(--ink); */
-    color: var(--ink-secondary);
-    font-size: 1.4em;
+    color: var(--ink);
+    font-size: clamp(0.5rem, 1.1vw, 1.5vw);
+    padding-bottom: 0.2em;
+    padding-top: 0.1em;
+
     font-weight: 600;
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    font-style: italic;
 }
 
 .new-rule-duration {
-    color: #ffffff;
-    font-size: 1.2em;
+    color: var(--ink-secondary);
+    font-size: clamp(0.5rem, 1vw, 1.5vw);
     font-weight: 300;
     font-style: italic;
 }
 
-
-
+.new-rules-separator {
+    height: 1px;
+    background: var(--border);
+    margin: 2px 0;
+    width: 80%;
+}
 
 /* =============================================================================
    CURRENT RULES
@@ -411,7 +425,8 @@ body {
     flex: 1 1 0;
     min-width: 100px;
     max-width: 550px;
-    min-height: 80px;
+    min-height: 60px;
+    /* max-height: 2vh; */
     transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.3s ease;
 }
 
@@ -435,7 +450,7 @@ body {
 
 .current-rule-description {
     color: var(--ink);
-    font-size: 1.4em;
+    font-size: clamp(0.7em, 1.4em, 1.9em);
     font-weight: 600;
     margin:0;
     text-align: center;
@@ -446,7 +461,8 @@ body {
 .current-rule-duration {
     color: var(--accent);
     text-align: center;
-    font-size: 1.2em;
+    font-size: clamp(0.5em, 1.2em, 1.7em);
+    /* font-size: 1.2em; */
     font-weight: 300;
     
     margin:0;
@@ -518,7 +534,7 @@ body {
    ============================================================================= */
 
 .tools-section {
-    margin-top: 10px;
+    margin-top: 100px;
     background: 
         radial-gradient(ellipse 80% 50% at 50% 0%, rgba(129, 182, 76, 0.03) 0%, transparent 40%),
         linear-gradient(180deg, var(--panel-bg) 0%, rgba(33, 32, 29, 0.95) 100%);
