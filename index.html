@@ -1,4 +1,4 @@
-﻿<!DOCTYPE HTML>
+<!DOCTYPE HTML>
 <html>
 <head>
     <title>Chess Chaos</title>
@@ -26,8 +26,12 @@
                     <div class="card-face card-back black-turn">Black Turn</div>
                 </div>
             </div>
-                
         </header>
+
+    <div class="ignore-turns-widget">
+        <span class="ignore-turns-label">Ignore Turns</span>
+        <input type="checkbox" id="ignore-turns-checkbox" class="ignore-turns-checkbox">
+    </div>
 
         <section id="game-section" class="game-section">
             <div id="viewport" class="viewport">
@@ -61,10 +65,6 @@
         </section>
 
         <section id="tools-section" class="tools-section">
-            <label class="ignore-turns-label">
-                <input type="checkbox" id="ignore-turns-checkbox" class="ignore-turns-checkbox">
-                Ignore Turns
-            </label>
             <button id="reset-board" type="button">Reset Board</button>
             <h3 id="next-turn-with-new-rules">New Rules In ? Turns</h3>
             <h3 id="pusher-status">Disconnected</h3>

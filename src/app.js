@@ -1,4 +1,4 @@
-﻿import './style.css';
+import './style.css';
 import Pusher from 'pusher-js';
 import { createZoomPan } from './viewport.js';
 import {
@@ -68,6 +68,11 @@ const highlightLayer = document.getElementById('highlight-layer');
 const viewport = document.getElementById('viewport');
 const stage = document.getElementById('stage');
 const resetButton = document.getElementById('reset-board');
+const ignoreTurnsCheckbox = document.getElementById('ignore-turns-checkbox');
+
+ignoreTurnsCheckbox.addEventListener('change', () => {
+    viewport.classList.toggle('ignoring-turns', ignoreTurnsCheckbox.checked);
+});
 
 // =============================================================================
 // PIECE VISUAL UPDATES
@@ -1161,7 +1166,7 @@ const syncBoardWithServer = (newState) => {
             updatePieceCaptureState(currentPiece);
             if (!playedCaptureSound) {
                 playCaptureSounds();
-                playCaptureSounds = true;
+                playedCaptureSound = true;
             }
         }
         // Sync emoji statuses (compare arrays by content)
