@@ -50,6 +50,14 @@ export const playCaptureSounds = () => {
     });
 };
 
+const ruleExpiredSoundFile = '/sounds/Peggle%20Free%20Ball%201%20(Quiet%20V3).wav';
+
+export const playRuleExpiredSound = () => {
+    const sfx = new Audio(ruleExpiredSoundFile);
+    sfx.volume = 0.8;
+    sfx.play().catch(() => {});
+};
+
 // =============================================================================
 // ASSET LISTS
 // =============================================================================

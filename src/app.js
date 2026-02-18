@@ -1,4 +1,4 @@
-import './style.css';
+﻿import './style.css';
 import Pusher from 'pusher-js';
 import { createZoomPan } from './viewport.js';
 import {
@@ -26,6 +26,7 @@ import {
     apiPost,
     getUserId,
     playCaptureSounds,
+    playRuleExpiredSound,
 } from './utils.js';
 import {
     turns
@@ -1291,6 +1292,11 @@ const handleTurnUpdate = (data) => {
     const nextNewRulesText = document.getElementById('next-turn-with-new-rules');
     nextNewRulesText.textContent = `New Rules In ${(newTurnState.nextTurnWithNewRules - newTurnState.currentTurn)} Turns`;
     
+    // Check if a rule just expired - if so, play a smooooooth sound
+    if (data.ruleJustExpired) {
+        playRuleExpiredSound();
+    }
+
     // Update the Current Rule visuals
     const gameSectionEl = document.getElementById('game-section');
     const currentRulesEl = document.getElementById("current-rules-section");

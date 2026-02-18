@@ -125,6 +125,16 @@ const ALL_POSSIBLE_RULES = {
         description: "Each player selects 2 random friendly Pieces, then picks one to kill",
         isInstant: true,
     },
+    sunday_school: {
+        title: "Sunday School",
+        description: "Do random Sporcle quiz on religion, whoever's better gets a Bishop in chosen empty square",
+        isInstant: true,
+    },
+    horse_race: {
+        title: "Horse 1 Always Wins",
+        description: "Watch a horse race, whoever's horse places higher gets a Knight in a chosen empty square",
+        isInstant: true,
+    },
 
 
     
@@ -406,20 +416,6 @@ const ALL_POSSIBLE_RULES = {
         minTurns: 3,
         maxTurns: 9,
     },
-    sunday_school: {
-        title: "Sunday School",
-        description: "Do random Sporcle quiz on religion, whoever's better gets a Bishop in chosen empty square",
-        isInstant: false,
-        minTurns: 3,
-        maxTurns: 9,
-    },
-    horse_race: {
-        title: "Horse 1 Always Wins",
-        description: "Watch a horse race, whoever's horse places higher gets a Knight in a chosen empty square",
-        isInstant: false,
-        minTurns: 3,
-        maxTurns: 9,
-    },
     knee_surgery: {
         title: "Knee Surgery",
         description: "Kings can now move 2 spots in every direction",
@@ -450,7 +446,7 @@ const ALL_POSSIBLE_RULES = {
     },
 };
 
-function getRawRules(count) {
+function getRawRules(count=25) {
     return Object.entries(ALL_POSSIBLE_RULES)
       .map(([id, rule]) => ({ id, ...rule }))
       .sort(() => Math.random() - 0.5)
@@ -475,11 +471,13 @@ Returns an array of rule objects:
     ....
 ]
 */
-export function getNextRules(currentRules, count = 3) {
+export function getNextRules(currentRules) {
     
-    console.log("HERES WHAT CURRENT RULES LOOKS LIKE: ", currentRules);
-    // First grab a randomized list of rules
-    const rawRules = getRawRules(count);
+    console.log("Generating 3 new rules...");
+    // First grab a randomized list of 25 rules
+    // We need more than 3 in case any of them are already active
+    // Definitely a better way of doing this but fuck it I am exhausted
+    const rawRules = getRawRules(25);
     let newRules = [];
     for (const nextRule of rawRules) {
         // First, check if this rule is already active - if so, we skip it
@@ -503,6 +501,10 @@ export function getNextRules(currentRules, count = 3) {
                 isInstant: false,
                 turnsLeft: randomTurns,
             });
+        }
+        // Stop once we've reached the 3-rule cap
+        if (newRules.length >= 3) {
+            break;
         }
     }
     // Now return our list of new rules!

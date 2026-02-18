@@ -181,6 +181,7 @@ async function incrementTurn(currentTurn, userId) {
 
     // Now update turns left on the current rules (removing any that have hit 0 turns left)
     newTurn.currentRules = [];
+    let ruleJustExpired = false;
     for (const rule of currentTurn.currentRules) {
         const newTurnsLeft = rule.turnsLeft - 1;
         if (newTurnsLeft > 0) { // Only keep rules that still have turns left
@@ -190,6 +191,10 @@ async function incrementTurn(currentTurn, userId) {
                 turnsLeft: newTurnsLeft,
                 isInstant: rule.isInstant
             });
+        } else {
+            // This means a rule expired on this turn!
+            // We don't keep it around, but we send an additional flag to the client so they can play a sound
+            ruleJustExpired = true;
         }
     }
 
@@ -207,7 +212,7 @@ async function incrementTurn(currentTurn, userId) {
     // Trigger Pusher event to tell all clients that new rule choices are live
     const CHANNEL_NAME = 'chess-events';
     const EVENT_TYPE_TURN_UPDATE = 'turn-event';
-    await pusher.trigger(CHANNEL_NAME, EVENT_TYPE_TURN_UPDATE, {newTurn, userId});
+    await pusher.trigger(CHANNEL_NAME, EVENT_TYPE_TURN_UPDATE, {newTurn, userId, ruleJustExpired});
     console.log(`Triggered Pusher event for Channel:${CHANNEL_NAME} and EventType:${EVENT_TYPE_TURN_UPDATE}`);
 
     // Finally, write the new turn state data back to the DB
@@ -221,11 +226,11 @@ async function incrementTurn(currentTurn, userId) {
 async function handleRuleSelection(newTurn, userId, payload) {
 
     // Grab the chosen rule
-    console.log("We're handling rule selection! Here's our payload", payload);
     const selectedRule = newTurn.newRuleChoices[payload.chosenIndex];
+    console.log("Here's our selected rule!", selectedRule)
 
     // If it's a persistent rule, add it to our list of current rules
-    if (selectedRule.turnsLeft > 0) {
+    if (!selectedRule.isInstant) {
         newTurn.currentRules.push(selectedRule);
     }
     // Empty our rule choices
