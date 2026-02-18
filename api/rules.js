@@ -62,7 +62,7 @@ const ALL_POSSIBLE_RULES = {
     },
     minefield: {
         title: "Minefield",
-        description: "3 random empty square becomes a mine, any piece that enters them dies",
+        description: "Mark 2 random empty squares. If a Piece enters that square, they die and the mine is removed",
         isInstant: true,
     },
     risk_it_rook: {
@@ -231,8 +231,8 @@ const ALL_POSSIBLE_RULES = {
         minTurns: 3,
         maxTurns: 9,
     },
-    paralyzed_by_constipation: {
-        title: "Paralyzed by Constipation",
+    severe_constipation: {
+        title: "Severe Constipation",
         description: "Bishops and Knights cannot move",
         isInstant: false,
         minTurns: 3,
@@ -475,12 +475,18 @@ Returns an array of rule objects:
     ....
 ]
 */
-export function getNextRules(count = 3) {
-    // First grab 3 random rules
+export function getNextRules(currentRules, count = 3) {
+    
+    console.log("HERES WHAT CURRENT RULES LOOKS LIKE: ", currentRules);
+    // First grab a randomized list of rules
     const rawRules = getRawRules(count);
     let newRules = [];
-    // Now we calculate the # of turns this rule will actually last for 
     for (const nextRule of rawRules) {
+        // First, check if this rule is already active - if so, we skip it
+        if (currentRules.some(currentRule => nextRule.title === currentRule.title)) {
+            continue;
+        }
+        // Now add the rule
         if (nextRule.isInstant) {
             newRules.push({
                 title: nextRule.title,
@@ -489,6 +495,7 @@ export function getNextRules(count = 3) {
                 turnsLeft: 0, // unnecessary but just keeping for data consistency
             });
         } else {
+            // Calculate the # of turns this rule will actually last for 
             const randomTurns = Math.floor(Math.random() * (nextRule.maxTurns - nextRule.minTurns + 1)) + nextRule.minTurns;
             newRules.push({
                 title: nextRule.title,

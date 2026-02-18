@@ -229,7 +229,7 @@ async function incrementTurn(currentTurn, userId) {
     // Finally - check if it's time for new rules!
     if (newTurn.currentTurn === newTurn.nextTurnWithNewRules) {
         newTurn.nextTurnWithNewRules += TURNS_UNTIL_NEW_RULES;
-        newTurn.newRuleChoices = getNextRules();
+        newTurn.newRuleChoices = getNextRules(newTurn.currentRules);
     } 
 
     console.log("Incremented turn successfully, now saving and sending this turn state:", newTurn);

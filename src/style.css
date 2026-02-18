@@ -21,6 +21,7 @@
     --title-card-bg: #262522;
     --danger: #c33;
     --gold: #e5a829;
+    --selection: #29c9e5;
 }
 
 /* =============================================================================
@@ -355,8 +356,6 @@ body {
     align-items: center;
     padding-top: 0px;
     padding-bottom: 5px;
-    padding-left: 5px;
-    padding-right: 5px;
 
     border: 3px solid #ffffff;
     border-radius: 6px;
@@ -372,6 +371,7 @@ body {
     min-height: 80px;
     max-height: 25%;
     width:70%;
+    overflow: hidden;
     transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.3s ease;
     padding-right: 0.7em;
     padding-left: 0.7em;
@@ -392,14 +392,14 @@ body {
 
 .new-rule-title {
     color: var(--accent-strong);
-    font-size: clamp(1rem, 1.7vw, 2vw);
+    font-size: clamp(0.5rem, 1.75rem, 2rem);
     font-weight: 700;
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .new-rule-description {
     color: var(--ink);
-    font-size: clamp(0.5rem, 1.1vw, 1.5vw);
+    font-size: clamp(0.5rem, 1.1vw, 1.3rem);
     padding-bottom: 0.2em;
     padding-top: 0.1em;
 
@@ -410,9 +410,10 @@ body {
 
 .new-rule-duration {
     color: var(--ink-secondary);
-    font-size: clamp(0.5rem, 1vw, 1.5vw);
+    font-size: clamp(0.5rem, 1vw, 1.05rem);
     font-weight: 300;
     font-style: italic;
+    padding-bottom: 2px;
 }
 
 .new-rules-separator {
@@ -553,12 +554,12 @@ body {
     content: '';
     position: absolute;
     inset: 0;
-    border: 3px solid var(--accent-strong);
+    border: 3px solid var(--selection);
     border-radius: 12px;
     pointer-events: none;
     box-shadow: 
-        0 0 15px rgba(129, 182, 76, 0.6),
-        inset 0 0 10px rgba(129, 182, 76, 0.3);
+        0 0 15px rgba(76, 175, 182, 0.6),
+        inset 0 0 10px rgba(76, 175, 182, 0.3);
 }
 
 .piece.captured {

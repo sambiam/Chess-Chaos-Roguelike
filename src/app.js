@@ -74,6 +74,15 @@ ignoreTurnsCheckbox.addEventListener('change', () => {
     viewport.classList.toggle('ignoring-turns', ignoreTurnsCheckbox.checked);
 });
 
+// Hotkey: Tab key toggles Ignore Turns checkbox
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        ignoreTurnsCheckbox.checked = !ignoreTurnsCheckbox.checked;
+        ignoreTurnsCheckbox.dispatchEvent(new Event('change'));
+    }
+});
+
 // =============================================================================
 // PIECE VISUAL UPDATES
 // =============================================================================
@@ -403,6 +412,8 @@ const syncHighlightFromServer = (serverHighlight) => {
 
 // Handles selecting a piece (updates game state and visuals)
 const handleSelectPiece = (slot) => {
+    if (state.selectedSlot === slot) return;
+
     // Deselect current piece first
     const previousSlot = state.selectedSlot;
     if (previousSlot) {
@@ -424,6 +435,13 @@ const handleDeselectPiece = () => {
     }
     deselectPiece();
 };
+
+// Sends the current board state (including selection) to the server
+const sendBoardState = () => apiPost('/api/board-state', {
+    clientSecret: clientSecret,
+    userId: getUserId(),
+    newState: getSimpleBoardState(),
+});
 
 // Handles resetting the board
 const handleResetBoard = () => {
@@ -567,7 +585,7 @@ const getAlivePieces = (colorFilter = null, typeFilter = null) => {
     return Object.values(state.pieces).filter(p => {
         if (p.captured) return false;
         if (colorFilter && p.color !== colorFilter) return false;
-        if (typeFilter && !p.label.includes(typeFilter)) return false;
+        if (typeFilter && !p.image.includes(typeFilter)) return false;
         return true;
     });
 };
@@ -835,6 +853,7 @@ const showContextMenu = (clientX, clientY, square, piece) => {
         updatePieceEmojis(piece);
         refreshAllReviveButtons();
         handleDeselectPiece();
+        playCaptureSounds();
         await apiPost('/api/board-state', {
             clientSecret: clientSecret,
             userId: getUserId(),
@@ -1000,8 +1019,10 @@ viewport.addEventListener('contextmenu', async event => {
     // If double right-click on any valid square, show the context menu
     if (isDoubleRightClick && targetSquare) {
         const piece = getPieceAt(targetSquare.col, targetSquare.row);
-        if (piece) handleSelectPiece(piece.slot); // Highlight the piece if present
+        const prevSlot = state.selectedSlot;
+        if (piece) handleSelectPiece(piece.slot);
         showContextMenu(event.clientX, event.clientY, targetSquare, piece);
+        if (state.selectedSlot !== prevSlot) await sendBoardState();
         return;
     }
 
@@ -1010,7 +1031,10 @@ viewport.addEventListener('contextmenu', async event => {
 
     // --- Normal single right-click behavior ---
     if (!targetSquare) {
-        handleDeselectPiece();
+        if (state.selectedSlot) {
+            handleDeselectPiece();
+            await sendBoardState();
+        }
         return;
     }
 
@@ -1018,13 +1042,17 @@ viewport.addEventListener('contextmenu', async event => {
 
     // No piece selected - try to select one
     if (!state.selectedSlot) {
-        if (targetPiece) handleSelectPiece(targetPiece.slot);
+        if (targetPiece) {
+            handleSelectPiece(targetPiece.slot);
+            await sendBoardState();
+        }
         return;
     }
 
     const selectedPiece = state.pieces[state.selectedSlot];
     if (!selectedPiece) {
         handleDeselectPiece();
+        await sendBoardState();
         return;
     }
 
@@ -1032,10 +1060,11 @@ viewport.addEventListener('contextmenu', async event => {
     if (selectedPiece.position.col === targetSquare.col && 
         selectedPiece.position.row === targetSquare.row) {
         handleDeselectPiece();
+        await sendBoardState();
         return;
     }
 
-    // Move the selected piece to target square
+    // Move the selected piece to target square (handleClientMove sends board state itself)
     await handleClientMove(state.selectedSlot, targetSquare.col, targetSquare.row);
 });
 
@@ -1121,7 +1150,7 @@ const handleBoardUpdate = (boardData) => {
         return;
     }
 
-    // Update client board based on server data
+    // Update client board based on server data (includes selection sync)
     syncBoardWithServer(boardData.newState);
 };
 
@@ -1146,7 +1175,7 @@ const syncBoardWithServer = (newState) => {
     */
    let playedCaptureSound = false;
     for (const [slot, newPiece] of Object.entries(newState)) {
-        if (slot === 'boardEffects' || slot === 'highlightedSquare') continue; // Handled separately below
+        if (slot === 'boardEffects' || slot === 'highlightedSquare' || slot === 'selectedSlot') continue;
         const currentPiece = state.pieces[Number(slot)];
         if (!currentPiece) continue; // Skip unknown keys
         if (currentPiece.position.row !== newPiece.position.row || currentPiece.position.col !== newPiece.position.col) {
@@ -1180,6 +1209,23 @@ const syncBoardWithServer = (newState) => {
     }
 
     refreshAllReviveButtons();
+
+    // Sync selection from server
+    const serverSelectedSlot = newState.selectedSlot ?? null;
+    if (state.selectedSlot !== serverSelectedSlot) {
+        if (state.selectedSlot) {
+            updatePieceSelection(state.pieces[state.selectedSlot], false);
+        }
+        state.selectedSlot = serverSelectedSlot;
+        if (serverSelectedSlot) {
+            const selectedPiece = state.pieces[serverSelectedSlot];
+            if (selectedPiece && !selectedPiece.captured) {
+                updatePieceSelection(selectedPiece, true);
+            } else {
+                state.selectedSlot = null;
+            }
+        }
+    }
 
     // Sync board effects
     if (newState.boardEffects) {
@@ -1425,30 +1471,3 @@ async function initializeApp() {
     await pullServerBoardState();
     await pullServerTurnState();
 }
-
-
-
-
-
-
-
-
-
-
-// TEMP TEMP TEMP TEMP
-// TEMP TEMP TEMP TEMP
-// TEMP TEMP TEMP TEMP
-// const endChoosingRules = function() {
-//     document.getElementById('viewport').classList.remove("choices-mode");
-//     document.getElementById('new-rules').classList.add("hidden");
-//     zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);
-// }
-// const startChoosingRules = function() {
-//     document.getElementById('viewport').classList.add("choices-mode");
-//     document.getElementById('new-rules').classList.remove("hidden");
-//     zoomPan.fitAndCenterContent(BOARD_SIZE, BOARD_SIZE);    
-// }
-// setTimeout(endChoosingRules, 2000);
-// setTimeout(startChoosingRules, 3000);
-// setTimeout(endChoosingRules, 6000);
-// setTimeout(startChoosingRules, 8000);

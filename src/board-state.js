@@ -41,6 +41,8 @@ export const BOARD_EFFECT_OPTIONS = [
     { name: 'misc_5',    emoji: '🌪️' },
     { name: 'misc_6',    emoji: '💰' },
     { name: 'misc_7',    emoji: '🕳️' },
+    { name: 'misc_8',    emoji: '🌩️' },
+    { name: 'misc_9',    emoji: '⚡' },
 ];
 
 export const BOARD_EFFECT_EMOJI_MAP = Object.fromEntries(
@@ -122,12 +124,14 @@ export const piecesConfig = [
 // Single source of truth for all game data.
 // - pieces: Object mapping slot ID to piece data (position, captured status, etc.)
 // - selectedSlot: Currently selected piece for move operations
+// - boardEffects: key: "col,row" → value: array of effect name strings
+// - highlightedSquare: { col, row, timestamp } or null — ephemeral randomizer highlight
 
 export const state = {
     pieces: {},
     selectedSlot: null,
-    boardEffects: {},       // key: "col,row" → value: array of effect name strings
-    highlightedSquare: null, // { col, row, timestamp } or null — ephemeral randomizer highlight
+    boardEffects: {},
+    highlightedSquare: null,
 };
 
 // This generates a simplified version of the state,
@@ -158,6 +162,8 @@ export const getSimpleBoardState = () => {
             emojis: [...piece.emojis],
         };
     }
+    // Include current selection so other clients can see it
+    simpleState.selectedSlot = state.selectedSlot;
     // Include board square effects
     simpleState.boardEffects = {};
     for (const [key, effects] of Object.entries(state.boardEffects)) {
