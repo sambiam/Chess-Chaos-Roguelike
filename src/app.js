@@ -67,6 +67,7 @@ const boardEffectsLayer = document.getElementById('board-effects-layer');
 const highlightLayer = document.getElementById('highlight-layer');
 const viewport = document.getElementById('viewport');
 const stage = document.getElementById('stage');
+const undoTurnButton = document.getElementById('undo-turn');
 const resetButton = document.getElementById('reset-board');
 const ignoreTurnsCheckbox = document.getElementById('ignore-turns-checkbox');
 
@@ -436,11 +437,12 @@ const handleDeselectPiece = () => {
     deselectPiece();
 };
 
-// Sends the current board state (including selection) to the server
-const sendBoardState = () => apiPost('/api/board-state', {
+// Syncs piece selection/deselection to the server (no undo snapshot)
+const sendSelectionUpdate = () => apiPost('/api/board-state', {
     clientSecret: clientSecret,
     userId: getUserId(),
     newState: getSimpleBoardState(),
+    skipSnapshot: true,
 });
 
 // Handles resetting the board
@@ -535,6 +537,19 @@ function initializePusher() {
 // =============================================================================
 // DOM EVENT HANDLERS
 // =============================================================================
+
+// Undo Turn button
+undoTurnButton.addEventListener('click', async () => {
+    const result = await apiPost('/api/undo', {
+        clientSecret: clientSecret,
+    });
+    if (!result.success) {
+        console.log("Failed to undo turn:", result.message);
+        return;
+    }
+    console.log("Successfully undid a turn!")
+    // The server will use Pusher to send all clients the updated states
+});
 
 // Reset button
 resetButton.addEventListener('click', async () => {
@@ -1022,7 +1037,7 @@ viewport.addEventListener('contextmenu', async event => {
         const prevSlot = state.selectedSlot;
         if (piece) handleSelectPiece(piece.slot);
         showContextMenu(event.clientX, event.clientY, targetSquare, piece);
-        if (state.selectedSlot !== prevSlot) await sendBoardState();
+        if (state.selectedSlot !== prevSlot) await sendSelectionUpdate();
         return;
     }
 
@@ -1033,7 +1048,7 @@ viewport.addEventListener('contextmenu', async event => {
     if (!targetSquare) {
         if (state.selectedSlot) {
             handleDeselectPiece();
-            await sendBoardState();
+            await sendSelectionUpdate();
         }
         return;
     }
@@ -1044,7 +1059,7 @@ viewport.addEventListener('contextmenu', async event => {
     if (!state.selectedSlot) {
         if (targetPiece) {
             handleSelectPiece(targetPiece.slot);
-            await sendBoardState();
+            await sendSelectionUpdate();
         }
         return;
     }
@@ -1052,7 +1067,7 @@ viewport.addEventListener('contextmenu', async event => {
     const selectedPiece = state.pieces[state.selectedSlot];
     if (!selectedPiece) {
         handleDeselectPiece();
-        await sendBoardState();
+        await sendSelectionUpdate();
         return;
     }
 
@@ -1060,7 +1075,7 @@ viewport.addEventListener('contextmenu', async event => {
     if (selectedPiece.position.col === targetSquare.col && 
         selectedPiece.position.row === targetSquare.row) {
         handleDeselectPiece();
-        await sendBoardState();
+        await sendSelectionUpdate();
         return;
     }
 

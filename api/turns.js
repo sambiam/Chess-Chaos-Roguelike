@@ -17,11 +17,9 @@ const TURNS_UNTIL_NEW_RULES = 3;
 const STARTING_PLAYER = 'white';
 
 import {getNextRules} from './rules.js';
-import {redis} from './_lib/redis.js';
+import {redis, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX} from './_lib/redis.js';
 import pusher from './_lib/pusher.js';
 import { checkPassword } from './auth.js';
-
-const REDIS_KEY = `rules:status`;
 
 export default async function handler(req, res) {
 
@@ -42,7 +40,7 @@ export default async function handler(req, res) {
 
         try {
             // Return the full hash of the board state
-            const rawTurnState = await redis.hgetall(REDIS_KEY);
+            const rawTurnState = await redis.hgetall(REDIS_TURNS_CURRENT);
             console.log("Here's the current Turn State from DB:", rawTurnState);
             // Sorta janky, but doing this to match the Pusher naming convention for the client
             // The alternative is to send ALL clients the board state via pusher but that feels wasteful
@@ -66,7 +64,7 @@ export default async function handler(req, res) {
         try {
 
             // This endpoint can process 3 things:
-            //      Reseting the turn state
+            //      Resetting the turn state
             //      Incrementing a turn
             //      Selecting a rule
             
@@ -86,7 +84,7 @@ export default async function handler(req, res) {
             }
 
             // First get the current turn state
-            const currentTurnState = await redis.hgetall(REDIS_KEY);
+            const currentTurnState = await redis.hgetall(REDIS_TURNS_CURRENT);
             console.log("got the turn state from DB", currentTurnState);
 
             switch (action) {
@@ -132,24 +130,6 @@ async function resetTurns() {
     //     turnsLeft: 5,
     //     isInstant: false
     // };
-    // const test2 = {
-    //     title: "Switcheroo",
-    //     description: "All Bishops and Knights swap places",
-    //     turnsLeft: 0,
-    //     isInstant: true
-    // };
-    // const test3 = {
-    //     title: "Communism",
-    //     description: "Every piece moves like a pawn",
-    //     turnsLeft: 6,
-    //     isInstant: false
-    // };
-    // const test4 = {
-    //     title: "Ice Age",
-    //     description: "Columns 1 and 8 are frozen",
-    //     turnsLeft: 5,
-    //     isInstant: false
-    // };
     // const mockCurrentRules = [test1, test2, test3, test4];
 
     // const newRuleMock1 = {
@@ -157,18 +137,6 @@ async function resetTurns() {
     //     description: "Both team's Rooks swap places",
     //     turnsLeft: 5,
     //     isInstant: true
-    // };
-    // const newRuleMock2 = {
-    //     title: "BOOM",
-    //     description: "Blow up one of your pieces, kill everything around it",
-    //     turnsLeft: 0,
-    //     isInstant: true
-    // };
-    // const newRuleMock3 = {
-    //     title: "Trans Rights",
-    //     description: "Kings now move like Queens, and vice versa",
-    //     turnsLeft: 6,
-    //     isInstant: false
     // };
     // const mockNewRules = [newRuleMock1, newRuleMock2, newRuleMock3];
 
@@ -189,10 +157,12 @@ async function resetTurns() {
 
     // Now, we write all the data back to the DB
     // Reminder: Redis values must all be strings, not raw JSON, so we stringify every value here
+    // Note: we do NOT delete the turn history here! That way you can "Undo Turn" to undo the board reset.
+        // This is strictly as a failsafe in case someone accidentally resets the board
     const stringifiedState = Object.fromEntries(
         Object.entries(newTurn).map(([id, data]) => [id, JSON.stringify(data)])
     );
-    await redis.hset(REDIS_KEY, stringifiedState); // Update the DB
+    await redis.hset(REDIS_TURNS_CURRENT, stringifiedState);
 }
 
 async function incrementTurn(currentTurn, userId) {
@@ -245,7 +215,7 @@ async function incrementTurn(currentTurn, userId) {
     const stringifiedState = Object.fromEntries(
         Object.entries(newTurn).map(([id, data]) => [id, JSON.stringify(data)])
     );
-    await redis.hset(REDIS_KEY, stringifiedState);
+    await redis.hset(REDIS_TURNS_CURRENT, stringifiedState);
 }
 
 async function handleRuleSelection(newTurn, userId, payload) {
@@ -270,11 +240,29 @@ async function handleRuleSelection(newTurn, userId, payload) {
     await pusher.trigger(CHANNEL_NAME, EVENT_TYPE_TURN_UPDATE, {newTurn, userId});
     console.log(`Triggered Pusher event for Channel:${CHANNEL_NAME} and EventType:${EVENT_TYPE_TURN_UPDATE}`);
 
-    // Finally, write the new turn state data back to the DB
-    // Reminder: Redis values must all be strings, not raw JSON, so we stringify every value here
+    // Get the current state of board and turn
+    // This is the one action handled solely by turns.js, so it's gotta do the history saving
+    const [prevBoardState, prevTurnState] = await Promise.all([
+        redis.hgetall(REDIS_BOARD_CURRENT),
+        redis.hgetall(REDIS_TURNS_CURRENT),
+    ]);
+
+    // Now we write the new turn state and the previous turn snapshot to the DB
+    // redis.multi() lets us do multiple DB calls simultaneously
     const stringifiedState = Object.fromEntries(
         Object.entries(newTurn).map(([id, data]) => [id, JSON.stringify(data)])
     );
-    await redis.hset(REDIS_KEY, stringifiedState);
+    const pipeline = redis.multi();
+    if (prevBoardState && prevTurnState) {
+        const snapshot = JSON.stringify({
+            boardState: prevBoardState,
+            turnState: prevTurnState,
+            timestamp: Date.now(),
+        });
+        pipeline.lpush(REDIS_UNDO_STACK, snapshot);
+        pipeline.ltrim(REDIS_UNDO_STACK, 0, UNDO_STACK_MAX - 1);
+    }
+    pipeline.hset(REDIS_TURNS_CURRENT, stringifiedState);
+    await pipeline.exec();
 }
 

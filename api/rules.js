@@ -387,7 +387,7 @@ const ALL_POSSIBLE_RULES = {
     },
     tornado: {
         title: "Tornado",
-        description: "Pick an empty square. If any Piece *can* move to that square, it must (unless it puts you in Check)",
+        description: "Pick an empty square. If any Piece *can* move to that square, it must",
         isInstant: false,
         minTurns: 3,
         maxTurns: 9,
@@ -408,7 +408,7 @@ const ALL_POSSIBLE_RULES = {
     },
     sunday_school: {
         title: "Sunday School",
-        description: "Do a random Sporcle quiz on religion, whoever scores higher gets a Bishop in a chosen empty square",
+        description: "Do random Sporcle quiz on religion, whoever's better gets a Bishop in chosen empty square",
         isInstant: false,
         minTurns: 3,
         maxTurns: 9,
