@@ -1469,9 +1469,9 @@ passwordForm.addEventListener('submit', async (e) => {
 });
 
 // UNCOMMENT THIS TO REMOVE MODAL FOR TESTING
-document.getElementById('password-modal').style.display = 'none';
-clientSecret = 'dougdoug';
-initializeApp();
+// document.getElementById('password-modal').style.display = 'none';
+// clientSecret = 'dougdoug';
+// initializeApp();
 
 async function initializeApp() {
     // Initialize all client elements
