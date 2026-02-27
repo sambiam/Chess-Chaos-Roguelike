@@ -259,8 +259,8 @@ const ALL_POSSIBLE_RULES = {
         title: "Hobbit Slaughter",
         description: "Only Pawns can die",
         isInstant: false,
-        minTurns: 3,
-        maxTurns: 6,
+        minTurns: 2,
+        maxTurns: 4,
     },
     christmas_truce: {
         title: "Christmas Truce",
