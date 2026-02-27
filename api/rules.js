@@ -362,7 +362,7 @@ const ALL_POSSIBLE_RULES = {
     },
     estrogen: {
         title: "Estrogen",
-        description: "Your King can move like a Queen",
+        description: "Kings can move like a Queens",
         isInstant: false,
         minTurns: 3,
         maxTurns: 9,
