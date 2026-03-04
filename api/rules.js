@@ -9,6 +9,7 @@ const ALL_POSSIBLE_RULES = {
         title: "Going Woke",
         description: "All Pieces in the right half of the board get pushed to the left 1 square (if open)",
         isInstant: true,
+        kingImmune: true,
     },
     march_of_the_pawnguins: {
         title: "March of the Pawnguins",
@@ -19,6 +20,7 @@ const ALL_POSSIBLE_RULES = {
         title: "The Rumbling",
         description: "All Pawns advance one square and kill everything they touch",
         isInstant: true,
+        kingImmune: true,
     },
     they_deserved_it: {
         title: "They Deserved It",
@@ -44,25 +46,29 @@ const ALL_POSSIBLE_RULES = {
         title: "Column Swap",
         description: "All Pieces in two random columns are swapped",
         isInstant: true,
+        kingImmune: true,
     },
     mind_control: {
         title: "Mind Control",
-        description: "Each player chooses one opponent Piece and converts it to their team",
+        description: "Each player chooses one opponent non-Royalty Piece and converts it to their team",
         isInstant: true,
+        kingImmune: true,
     },
     drafted_for_battle: {
         title: "Drafted for Battle",
         description: "Both Players swap their King with a friendly Bishop or Knight of their choice",
         isInstant: true,
+        kingImmune: true,
     },
     hot_drop: {
         title: "Hot Drop",
-        description: "Each Player gets a Queen in a random open square (they cannot attack King this turn)",
+        description: "Each Player gets a Queen in a random open square",
         isInstant: true,
+        kingImmune: true,
     },
     minefield: {
         title: "Minefield",
-        description: "Mark 2 random empty squares. If a Piece enters that square, they die and the mine is removed",
+        description: "Mark 2 random empty squares with mines. If a Piece enters that square, they die and the mine is removed",
         isInstant: true,
     },
     risk_it_rook: {
@@ -74,6 +80,7 @@ const ALL_POSSIBLE_RULES = {
         title: "2 Kids in a Trenchcoat",
         description: "Sacrifice 2 Pawns to put a new Bishop anywhere on the board",
         isInstant: true,
+        kingImmune: true,
     },
     charge: {
         title: "CHAAAARGE!",
@@ -94,16 +101,19 @@ const ALL_POSSIBLE_RULES = {
         title: "Get Up In Their Face",
         description: "All your Pieces slide forward until they hit an empty square",
         isInstant: true,
+        kingImmune: true,
     },
     a_light_breeze: {
         title: "A Light Breeze",
-        description: "All Pieces in rows 4 and 5 move one square to the right, killing anything in the way",
+        description: "All Pieces in columns D and E move one square to the right, killing anything in the way",
         isInstant: true,
+        kingImmune: true,
     },
     anti_camping: {
         title: "Anti-Camping",
         description: "Pick an enemy Piece, swap it with a random friendly Piece",
         isInstant: true,
+        kingImmune: true,
     },
     bottomless_pit: {
         title: "Bottomless Pit",
@@ -114,6 +124,7 @@ const ALL_POSSIBLE_RULES = {
         title: "Moving Up the Corporate Ladder",
         description: "Pick 2 Pieces in the same column, then swap them",
         isInstant: true,
+        kingImmune: true,
     },
     hurricane: {
         title: "Hurricane",
@@ -122,18 +133,20 @@ const ALL_POSSIBLE_RULES = {
     },
     sophies_choice: {
         title: "Sophie's Choice",
-        description: "Each player selects 2 random friendly Pieces, then picks one to kill",
+        description: "Each player selects 2 random friendly non-King Pieces. They must pick one to kill",
         isInstant: true,
     },
     sunday_school: {
         title: "Sunday School",
         description: "Do random Sporcle quiz on religion, whoever's better gets a Bishop in chosen empty square",
         isInstant: true,
+        kingImmune: true,
     },
     horse_race: {
         title: "Horse 1 Always Wins",
         description: "Watch a horse race, whoever's horse places higher gets a Knight in a chosen empty square",
         isInstant: true,
+        kingImmune: true,
     },
 
 
@@ -159,7 +172,7 @@ const ALL_POSSIBLE_RULES = {
     },
     mitosis: {
         title: "Mitosis",
-        description: "Pick a Piece. It cannot move, but if it's alive when this rule expires, spawn a duplicate of the Piece into an empty adjacent square",
+        description: "Pick a Piece. It cannot move, but if it's alive when this rule expires, spawn a duplicate into an empty adjacent square",
         isInstant: false,
         minTurns: 3,
         maxTurns: 9,
@@ -208,7 +221,7 @@ const ALL_POSSIBLE_RULES = {
     },
     call_down_lightning: {
         title: "Call Down Lightning",
-        description: "Mark a random empty square. When this expires, whoever controls that square chooses an enemy piece to die",
+        description: "Mark a random empty square. When this expires, whoever controls that square picks a non-King Piece to die",
         isInstant: false,
         minTurns: 3,
         maxTurns: 9,
@@ -223,13 +236,6 @@ const ALL_POSSIBLE_RULES = {
     gigachad_aura: {
         title: "Gigachad Aura",
         description: "When this expires, all Pieces adjacent to a King die",
-        isInstant: false,
-        minTurns: 3,
-        maxTurns: 9,
-    },
-    second_chance: {
-        title: "Second Chance",
-        description: "When any Piece dies, 50% chance it is revived in a random empty square",
         isInstant: false,
         minTurns: 3,
         maxTurns: 9,
@@ -302,7 +308,7 @@ const ALL_POSSIBLE_RULES = {
         description: "Kings are immune and can move 2 squares at a time",
         isInstant: false,
         minTurns: 3,
-        maxTurns: 7,
+        maxTurns: 4,
     },
     early_promo: {
         title: "Early Promotion",
@@ -313,14 +319,14 @@ const ALL_POSSIBLE_RULES = {
     },
     short_stop: {
         title: "Short Stop",
-        description: "Pieces may move a maximum of 1 square per turn.",
+        description: "Pieces may move a maximum of 1 square per turn. Knights cannot move.",
         isInstant: false,
         minTurns: 3,
-        maxTurns: 7,
+        maxTurns: 8,
     },
     pawns_with_viagra: {
         title: "Pawns with Viagra",
-        description: "Pawns can attack left and right",
+        description: "Pawns can attack left or right",
         isInstant: false,
         minTurns: 3,
         maxTurns: 9,
@@ -344,7 +350,7 @@ const ALL_POSSIBLE_RULES = {
         description: "Rock Paper Scissors for a chance to stop any attack",
         isInstant: false,
         minTurns: 3,
-        maxTurns: 9,
+        maxTurns: 7,
     },
     pawns_learned_strength: {
         title: "Pawns learned Strength!",
@@ -425,7 +431,7 @@ const ALL_POSSIBLE_RULES = {
     },
     crtical_strike: {
         title: "Critical Strike",
-        description: "Every capture has a 50% chance to capture a random adjacent enemy Piece",
+        description: "Every capture has a 50% chance to capture a random adjacent enemy non-King Piece",
         isInstant: false,
         minTurns: 3,
         maxTurns: 9,
@@ -442,7 +448,7 @@ const ALL_POSSIBLE_RULES = {
         description: "Two random Pieces on your team cannot die",
         isInstant: false,
         minTurns: 3,
-        maxTurns: 6,
+        maxTurns: 5,
     },
 };
 
@@ -491,6 +497,7 @@ export function getNextRules(currentRules) {
                 description: nextRule.description,
                 isInstant: true,
                 turnsLeft: 0, // unnecessary but just keeping for data consistency
+                kingImmune: !!nextRule.kingImmune,
             });
         } else {
             // Calculate the # of turns this rule will actually last for 
@@ -500,6 +507,7 @@ export function getNextRules(currentRules) {
                 description: nextRule.description,
                 isInstant: false,
                 turnsLeft: randomTurns,
+                kingImmune: !!nextRule.kingImmune,
             });
         }
         // Stop once we've reached the 3-rule cap

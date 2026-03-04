@@ -1,4 +1,4 @@
-﻿import './style.css';
+import './style.css';
 import Pusher from 'pusher-js';
 import { createZoomPan } from './viewport.js';
 import {
@@ -1375,6 +1375,13 @@ const handleTurnUpdate = (data) => {
                 nextDuration.textContent = `${nextRule.turnsLeft} Turns`;
             }            
             newRuleCard.append(nextDuration);
+
+            if (nextRule.kingImmune) {
+                const crownEmoji = document.createElement('span');
+                crownEmoji.classList.add('new-rule-king-immune');
+                crownEmoji.textContent = '\uD83D\uDC51';
+                newRuleCard.append(crownEmoji);
+            }
             newRuleCard.addEventListener('click', async () => {
                 // We clicked a new rule! 
 

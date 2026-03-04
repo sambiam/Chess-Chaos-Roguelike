@@ -350,6 +350,7 @@ body {
 }
 
 .new-rule-card {
+    position: relative;
     display:flex;
     flex-direction: column;
     justify-content: center;
@@ -414,6 +415,15 @@ body {
     font-weight: 300;
     font-style: italic;
     padding-bottom: 2px;
+}
+
+.new-rule-king-immune {
+    position: absolute;
+    bottom: 7px;
+    right: 3px;
+    font-size: clamp(0.6rem, 1.1vw, 1.5rem);
+    line-height: 1;
+    pointer-events: none;
 }
 
 .new-rules-separator {
