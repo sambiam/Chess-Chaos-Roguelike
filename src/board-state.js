@@ -41,7 +41,7 @@ export const BOARD_EFFECT_OPTIONS = [
     { name: 'misc_5',    emoji: '🌪️' },
     { name: 'misc_6',    emoji: '💰' },
     { name: 'misc_7',    emoji: '🕳️' },
-    { name: 'misc_9',    emoji: '⚡' },
+    { name: 'misc_8',    emoji: '⚡' },
     { name: 'misc_9',    emoji: '☢️' },
 ];
 
