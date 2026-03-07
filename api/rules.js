@@ -277,7 +277,7 @@ const ALL_POSSIBLE_RULES = {
     },
     ice_age: {
         title: "Ice Age",
-        description: "Pieces in columns 1 and 8 are frozen",
+        description: "Pieces currently in columns 1 and 8 are frozen and immune",
         isInstant: false,
         minTurns: 3,
         maxTurns: 9,
