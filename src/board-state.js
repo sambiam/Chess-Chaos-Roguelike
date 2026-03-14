@@ -315,7 +315,18 @@ export const resetBoard = () => {
     });
     state.boardEffects = {};  // Clear all board square effects on reset
     state.highlightedSquare = null;  // Clear highlight on reset
-    return resetPieces; // Return all pieces so app.js can update visuals
+    return resetPieces; // Return all pieces so the view can update visuals
+};
+
+// =============================================================================
+// TURN STATE
+// =============================================================================
+
+export const turns = {
+    currentTurn: 1,
+    currentPlayer: "white",
+    currentRules: [],
+    newRuleChoices: [],
 };
 
 

@@ -1,9 +1,23 @@
 const ALL_POSSIBLE_RULES = {
 
+    // DOUG NOTES:
+    /*
+        People suggested to have players pick the new rules AFTER their turn, not before
+            i.e. you make your turn, THEN you pick a rule that applies
+            Conceptually this prevents a lot of insta-kills on the Kings, plus just generally should be more balanced
+        I tested this out with Parkzer. Results:
+            It is indeed more fair! The power swings aren't as wild, more strategy can be used (better player will win more).
+            It feels like 15% less exciting - it's not massive, but you're definitely getting fewer hilarious moments.
+            Slightly less intuitive game flow, it's strange to make a move but your turn isn't actually done yet 1/3rd of the time
+        Conclusion:
+            For my streams, I'm leaving it as is
+                I think it's more exciting, particularly for bad players who will have more opportunities for sick plays
+            If this were to be released publicly or played by actual good players, should swap to the after-turn choices
+    */
+
     // =============================================
     //               ALL INSTANTS
     // =============================================
-
 
     going_woke: {
         title: "Going Woke",
