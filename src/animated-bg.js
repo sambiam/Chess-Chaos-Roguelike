@@ -3,6 +3,10 @@
 // ANIMATED BACKGROUNDS
 // =============================================================================
 //
+
+// Contains 4 different animation options for the app and rule choice backgrounds
+// I just told Claude "make some cool shit" and tweaked the results and it turned out pretty good tbh
+
 // Available effects (1–4):
 //
 //   1 = Floating Embers      Glowing particles drift upward with gentle sway
