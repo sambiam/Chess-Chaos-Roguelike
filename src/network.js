@@ -32,11 +32,18 @@ export function initNetwork({ clientSecret }) {
 // =============================================================================
 
 function initializePusher() {
-    const pusherKey = 'e8e241cce30912124291';
-	const pusherCluster = 'us2';
+    const pusherKey = import.meta.env.VITE_PUSHER_KEY;
+	const pusherCluster = import.meta.env.VITE_PUSHER_CLUSTER;
     const CHANNEL_NAME = 'chess-events';
     const EVENT_TYPE_BOARD_UPDATE = 'board-event';
     const EVENT_TYPE_TURN_UPDATE = 'turn-event';
+
+    if (!pusherKey || !pusherCluster) {
+        throw new Error(
+            'Missing VITE_PUSHER_KEY / VITE_PUSHER_CLUSTER. Set these to your own Pusher app credentials ' +
+            '(see .env.example) so your deployment does not share a channel with other instances of this app.'
+        );
+    }
 
 	pusherClient = new Pusher(pusherKey, {cluster: pusherCluster,});
 	

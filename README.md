@@ -10,6 +10,23 @@ Feel free to use this for whatever you want! (although again you probably should
 
 ---
 
+## Running your own instance (to play with friends)
+
+You need three free accounts: Vercel (hosting), Upstash (Redis), and Pusher (live sync). All have generous free tiers that easily cover a couple of people playing casually.
+
+1. **Fork/push this repo to your own GitHub**, then go to [vercel.com](https://vercel.com), "Add New Project", and import it.
+2. **Add Redis:** in the Vercel project, go to the Storage tab and add an "Upstash" (Redis) integration/database. This auto-sets `KV_REST_API_URL` and `KV_REST_API_TOKEN` for you.
+3. **Add Pusher:** create a free app at [dashboard.pusher.com](https://dashboard.pusher.com) (Channels product, any cluster). Grab the App ID, key, secret, and cluster from its "App Keys" page.
+4. **Set environment variables** in the Vercel project's Settings → Environment Variables (see `.env.example` for the full list):
+   - `CHESS_SECRET` — a password you and your friend will share to get past the login modal.
+   - `PUSHER_APP_ID`, `PUSHER_KEY`, `PUSHER_SECRET`, `PUSHER_CLUSTER` — from step 3.
+   - `VITE_PUSHER_KEY`, `VITE_PUSHER_CLUSTER` — same key/cluster as above, exposed to the frontend build (Vite only ships `VITE_`-prefixed vars to the client). These are **required** — the app throws on startup if they're missing, so you don't accidentally end up sharing a live channel with someone else's deployment.
+5. **Deploy.** Vercel will build and give you a URL — share that URL and the `CHESS_SECRET` password with your friend, and you're both playing the same game.
+
+For local dev, copy `.env.example` to `.env.local`, run `vercel dev` (for the API routes) and `npm run dev` (for the Vite frontend, which proxies `/api` to `localhost:3000` per `vite.config.js`).
+
+---
+
 ## High level stuff
 
 | Component | Description |
