@@ -3,27 +3,51 @@
 // API FUNCTIONS
 // =============================================================================
 
+// Reads a JSON body, but never throws: a crashed serverless function answers
+// with an HTML error page, and an unhandled parse error used to take the whole
+// click handler down with it (leaving the game silently unresponsive).
+async function readJsonResponse(response, endpoint) {
+    try {
+        return await response.json();
+    } catch {
+        console.error(`Non-JSON response from ${endpoint} (HTTP ${response.status})`);
+        return {
+            success: false,
+            message: `${endpoint} returned HTTP ${response.status}`,
+        };
+    }
+}
+
 // HTTP GET helper function
 export async function apiGet(endpoint, params = {}) {
     const queryString = new URLSearchParams(params).toString(); // Build query string from params object,  e.g., { playerId: "mario", limit: 10 } becomes "?playerId=mario&limit=10"
-    const url = queryString ? `${endpoint}?${queryString}` : endpoint;    
-    const response = await fetch(url); // Send the HTTP request
-    const data = await response.json();
-    return data;
+    const url = queryString ? `${endpoint}?${queryString}` : endpoint;
+    let response;
+    try {
+        response = await fetch(url); // Send the HTTP request
+    } catch (error) {
+        console.error(`Network error calling ${endpoint}:`, error);
+        return { success: false, message: 'network error — could not reach the server' };
+    }
+    return readJsonResponse(response, endpoint);
 }
 
 // HTTP POST helper function
 export async function apiPost(endpoint, body = {}) {
-    const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-        'Content-Type': 'application/json', // Tell the server we're sending JSON
-        },
-        body: JSON.stringify(body), // Convert JS object to JSON string
-    });
-    const data = await response.json();
-    return data;
-    // return response;
+    let response;
+    try {
+        response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+            'Content-Type': 'application/json', // Tell the server we're sending JSON
+            },
+            body: JSON.stringify(body), // Convert JS object to JSON string
+        });
+    } catch (error) {
+        console.error(`Network error calling ${endpoint}:`, error);
+        return { success: false, message: 'network error — could not reach the server' };
+    }
+    return readJsonResponse(response, endpoint);
 }
 
 // Returns this browser's unique ID (or generates a new one if they don't have it already)

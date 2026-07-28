@@ -31,7 +31,7 @@ Engine tests live in `tests/engine.test.mjs` — run with `npm test`.
 You need three free accounts: Vercel (hosting), Upstash (Redis), and Pusher (live sync). All have generous free tiers that easily cover a couple of people playing casually.
 
 1. **Fork/push this repo to your own GitHub**, then go to [vercel.com](https://vercel.com), "Add New Project", and import it.
-2. **Add Redis:** in the Vercel project, go to the Storage tab and add an "Upstash" (Redis) integration/database. This auto-sets `KV_REST_API_URL` and `KV_REST_API_TOKEN` for you.
+2. **Add Redis:** in the Vercel project, go to the Storage tab and add an "Upstash" (Redis) integration/database. This auto-sets `KV_REST_API_URL` and `KV_REST_API_TOKEN` for you. If your setup only exposes a connection string (`REDIS_URL`/`KV_URL` of the form `rediss://default:<token>@<db>.upstash.io:6379`), that works too — the app derives the REST endpoint and token from it. What it *cannot* use is a non-Upstash `redis://` server: the `@upstash/redis` client talks HTTPS, not the Redis wire protocol. When Redis is unconfigured every API route now answers `503` with an explanation instead of a bare `500`.
 3. **Add Pusher:** create a free app at [dashboard.pusher.com](https://dashboard.pusher.com) (Channels product, any cluster). Grab the App ID, key, secret, and cluster from its "App Keys" page.
 4. **Set environment variables** in the Vercel project's Settings → Environment Variables (see `.env.example` for the full list):
    - `CHESS_SECRET` — a password you and your friend will share to get past the login modal.
@@ -60,11 +60,11 @@ For local dev, copy `.env.example` to `.env.local`, run `vercel dev` (for the AP
 Dude this is where it's a mess, the frontend started as a single file but is so confusing at this point:
 | File | What it does |
 |---|---|
-| `src/app.js` | Main entry point, wires up the module, handles right-click input for updating pieces, posts board state to the server after each move, manages the password login modal. |
+| `src/app.js` | Main entry point, wires up the module, handles click input for selecting and moving pieces, posts board state to the server after each move, manages the password login modal. |
 | `src/board-state.js` | Stores client-side game state (pieces, selected slot, board effects, turn data) and the logic for moving, capturing, reviving, resetting, etc. |
 | `src/board-view.js` | Renders actual DOM, creates and updates piece elements, the settings panel (which lets you update the piece images), the board effects layer, the randomizer panel, and the rule chooser UI. |
 | `src/network.js` | Initializes the Pusher WebSocket connection, receives incoming board/turn events from the server, and syncs the server updates into the frontend board |
-| `src/viewport.js` | The zoom-and-pan system for the chess board (with zooming, dragging, resetting, etc) |
+| `src/viewport.js` | Fits and centres the chess board inside its viewport. The board is fixed in place — no dragging to pan, no scroll-wheel zoom — so every click on it goes to the game. |
 | `src/utils.js` | Various helper functions |
 | `src/animated-bg.js` | Logic for 4 animated background effects that are used on the page background and new rule chooser panel. |
 | `src/style.css` | Absolutely gargantuan mess of styling for the whole app |

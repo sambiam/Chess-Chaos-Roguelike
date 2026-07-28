@@ -28,7 +28,7 @@ const STARTING_TURN = 1;
 const TURNS_UNTIL_NEW_RULES = 3;
 const STARTING_PLAYER = 'white';
 
-import { redis, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX } from './_lib/redis.js';
+import { redis, redisUnavailable, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX } from './_lib/redis.js';
 import pusher from './_lib/pusher.js';
 import { checkPassword } from './auth.js';
 import { buildGame, serializeBoard, serializeTurn } from '../shared/engine.js';
@@ -39,6 +39,8 @@ const EVENT_TYPE_BOARD_UPDATE = 'board-event';
 const EVENT_TYPE_TURN_UPDATE = 'turn-event';
 
 export default async function handler(req, res) {
+
+    if (redisUnavailable(res)) return;
 
     // GET TURN STATE
     if (req.method === 'GET') {
