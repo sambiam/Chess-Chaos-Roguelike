@@ -106,8 +106,17 @@ export default async function handler(req, res) {
             // If skipSnapshot is true, it means this board-state event was triggered from someone selecting or deselecting a piece
             // We want this synced on the server (so clients can see it), but we don't want to add it to our turn history,
             // because otherwise 50%+ of the turn history is just piece selections
+            // Note: every POST carries the client's COMPLETE board state, so we
+            // DEL before HSET. A bare HSET only merges: slots the client no
+            // longer knows about (rule-spawned pieces 33+, removed after a
+            // Reset Board) survived in the hash and were resurrected by the
+            // next server-authoritative action — that's how ghost Queens from
+            // a previous game reappeared on the first move of a new one.
             if (skipSnapshot) {
-                await redis.hset(REDIS_BOARD_CURRENT, stringifiedState);
+                await redis.multi()
+                    .del(REDIS_BOARD_CURRENT)
+                    .hset(REDIS_BOARD_CURRENT, stringifiedState)
+                    .exec();
             } else {
                 // Grab current board + turn state to create an undo snapshot
                 const [prevBoardState, prevTurnState] = await Promise.all([
@@ -125,6 +134,7 @@ export default async function handler(req, res) {
                     pipeline.lpush(REDIS_UNDO_STACK, snapshot);
                     pipeline.ltrim(REDIS_UNDO_STACK, 0, UNDO_STACK_MAX - 1);
                 }
+                pipeline.del(REDIS_BOARD_CURRENT);
                 pipeline.hset(REDIS_BOARD_CURRENT, stringifiedState);
                 await pipeline.exec();
             }
