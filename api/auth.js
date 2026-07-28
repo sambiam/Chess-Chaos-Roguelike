@@ -8,13 +8,13 @@ export default async function handler(req, res) {
         // First check the client's password against the real password on Vercel
         const { clientSecret } = req.query;
         if (!checkPassword(clientSecret)) {
-            console.log("Client's password is wrong:", clientSecret);
+            console.log("A client sent the wrong password");
             return res.status(401).json({
                 success: false,
                 message: "Invalid password, get outta here ya rascal!"
             });
         } else {
-            console.log("Client has the right password:", clientSecret);
+            console.log("A client authenticated successfully");
             return res.status(200).json({
                 success: true,
                 message: "Password accepted! Get in you big ol bag of beans"

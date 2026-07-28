@@ -28,7 +28,7 @@ const STARTING_TURN = 1;
 const TURNS_UNTIL_NEW_RULES = 3;
 const STARTING_PLAYER = 'white';
 
-import { redis, redisUnavailable, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX } from './_lib/redis.js';
+import { redis, redisUnavailable, withStateLock, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX } from './_lib/redis.js';
 import pusher from './_lib/pusher.js';
 import { checkPassword } from './auth.js';
 import { buildGame, serializeBoard, serializeTurn } from '../shared/engine.js';
@@ -50,7 +50,7 @@ export default async function handler(req, res) {
         // First check the client's password against the real password on Vercel
         const { clientSecret } = req.query;
         if (!checkPassword(clientSecret)) {
-            console.log("A client provided the wrong password, rejecting the Get Board State Request, password was ", clientSecret);
+            console.log("Rejecting a Get Turn State request: wrong password");
             return res.status(401).json({
                 success: false,
                 message: "Invalid password, get outta here ya rascal"
@@ -89,7 +89,7 @@ export default async function handler(req, res) {
 
             // First check the client's password against the real password on Vercel
             if (!checkPassword(clientSecret)) {
-                console.log("A client provided the wrong password, rejecting the request, password was ", clientSecret);
+                console.log("Rejecting a turn state update: wrong password");
                 return res.status(401).json({
                     success: false,
                     message: "Invalid password, get outta here ya rascal"
@@ -99,6 +99,12 @@ export default async function handler(req, res) {
             if (!action) {
                 return res.status(400).json({ success: false, error: 'Missing action type' });
             }
+
+            // Load-and-write runs under the state lock: a rule selection or a
+            // sandbox turn advance must not interleave with a move being
+            // processed in /api/game, or the slower writer silently undoes the
+            // other one's changes.
+            return await withStateLock(async () => {
 
             // Load both current states — rule effects touch the board too
             const [currentBoardState, currentTurnState] = await Promise.all([
@@ -175,6 +181,7 @@ export default async function handler(req, res) {
                 default:
                     return res.status(400).json({ success: false, error: 'Unknown action type' });
             }
+            });
         } catch (error) {
             console.error('Redis SET error:', error);
             return res.status(500).json({ success: false, error: 'Failed to update board state in database' });
