@@ -126,8 +126,6 @@ const postBoardState = (extra = {}) => apiPost('/api/board-state', {
     ...extra,
 });
 
-const sendSelectionUpdate = () => postBoardState({ skipSnapshot: true });
-
 const postGameAction = async (action, payload = {}) => {
     const result = await apiPost('/api/game', {
         clientSecret,
@@ -140,6 +138,13 @@ const postGameAction = async (action, payload = {}) => {
     }
     return result;
 };
+
+// Sharing "who is selected" must never rewrite the board. In enforced play the
+// server owns the board, so we send the selection as an intent; only Sandbox
+// Mode (a deliberately free-form board) still pushes the client's whole mirror.
+const sendSelectionUpdate = () => inSandboxMode()
+    ? postBoardState({ skipSnapshot: true })
+    : postGameAction('SELECT', { slot: state.selectedSlot });
 
 // Builds a read-only engine game object over the client's mirrored state
 const localGame = () => ({
@@ -455,9 +460,19 @@ passButton.addEventListener('click', async () => {
 
 // Reset button
 resetButton.addEventListener('click', async () => {
-    handleResetBoard();
-    await postBoardState();
-    await apiPost('/api/turns', {clientSecret, userId: getUserId(), action: 'RESET_TURNS',});
+    if (inSandboxMode()) {
+        // Sandbox is a free-form board with no server-side game to rebuild,
+        // so the client's own reset is the source of truth here
+        handleResetBoard();
+        await postBoardState();
+        await apiPost('/api/turns', {clientSecret, userId: getUserId(), action: 'RESET_TURNS',});
+        return;
+    }
+    // Enforced play: the server rebuilds the starting board from
+    // shared/defs.js and broadcasts it. Resetting from the local mirror could
+    // re-upload pieces a stale tab was still carrying, which is exactly how
+    // rule-spawned Queens survived a reset and returned on the next move.
+    await postGameAction('RESET_GAME');
 });
 
 // Settings panel: handle image dropdown changes (Sandbox tool)

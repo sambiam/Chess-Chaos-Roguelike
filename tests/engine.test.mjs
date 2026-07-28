@@ -23,6 +23,8 @@ import {
     resolveChoice,
     finishTurn,
 } from '../shared/effects.js';
+import { createStartingPieces } from '../shared/defs.js';
+import { DEFAULT_TURN_STATE } from '../shared/engine.js';
 
 let testCount = 0;
 let failCount = 0;
@@ -736,6 +738,64 @@ test('serialize -> build round trip preserves state', () => {
 });
 
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+console.log('== board reset ==');
+// ---------------------------------------------------------------------------
+
+test('a fresh starting board has exactly the standard 32 pieces', () => {
+    const pieces = createStartingPieces();
+    assert.equal(Object.keys(pieces).length, 32);
+    assert.ok(Object.keys(pieces).every(slot => Number(slot) <= 32));
+    assert.ok(Object.values(pieces).every(p => !p.captured && !p.moved && p.emojis.length === 0));
+});
+
+test('createStartingPieces hands out independent copies', () => {
+    const first = createStartingPieces();
+    first['1'].position.col = 4;
+    first['1'].emojis.push('frozen');
+    const second = createStartingPieces();
+    assert.equal(second['1'].position.col, 0);
+    assert.deepEqual(second['1'].emojis, []);
+});
+
+test('resetting drops rule-spawned pieces instead of carrying them over', () => {
+    // Hot Drop drops a Queen on a random empty square for each player
+    const game = buildGame(serializeBoard({
+        pieces: createStartingPieces(), boardEffects: {}, selectedSlot: null, highlightedSquare: null,
+    }), {});
+    applyRuleSelection(game, { id: 'hot_drop', data: {} }, 'white', seededRng());
+    const spawned = Object.keys(game.pieces).filter(slot => Number(slot) > 32);
+    assert.equal(spawned.length, 2, 'expected Hot Drop to spawn a Queen per player');
+    assert.ok(spawned.every(slot => pieceType(game.pieces[slot]) === 'Queen'));
+
+    // What RESET_GAME does: rebuild from the shared definition rather than
+    // from the live board, so those Queens cannot survive into the next game
+    game.pieces = createStartingPieces();
+    game.boardEffects = {};
+    const afterReset = buildGame(serializeBoard(game), {});
+    assert.equal(Object.keys(afterReset.pieces).length, 32);
+    assert.ok(!Object.keys(afterReset.pieces).some(slot => Number(slot) > 32));
+});
+
+test('buildGame never aliases the shared default turn state', () => {
+    // A turn hash missing these fields used to hand back DEFAULT_TURN_STATE's
+    // own arrays/objects, so a push or a seat claim leaked into the next
+    // request on a warm serverless instance
+    const first = buildGame({}, {});
+    first.turn.currentRules.push({ id: 'leaked' });
+    first.turn.pendingChoices.push({ id: 'leaked' });
+    first.turn.seats.black = 'someone';
+
+    assert.deepEqual(DEFAULT_TURN_STATE.currentRules, []);
+    assert.deepEqual(DEFAULT_TURN_STATE.pendingChoices, []);
+    assert.deepEqual(DEFAULT_TURN_STATE.seats, { white: null, black: null });
+
+    const second = buildGame({}, {});
+    assert.deepEqual(second.turn.currentRules, []);
+    assert.deepEqual(second.turn.pendingChoices, []);
+    assert.deepEqual(second.turn.seats, { white: null, black: null });
+});
 
 console.log(`\n${testCount - failCount}/${testCount} tests passed`);
 if (failCount > 0) process.exit(1);

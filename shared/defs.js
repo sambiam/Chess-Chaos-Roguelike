@@ -35,6 +35,78 @@ export const imageForType = (color, type) => {
 export const PIECE_VALUES = { Pawn: 1, Knight: 3, Bishop: 3, Rook: 5, Queen: 9, King: 100 };
 
 // =============================================================================
+// STARTING BOARD
+// =============================================================================
+// The standard 32 pieces, shared so the SERVER can rebuild a pristine board on
+// its own. Reset used to be "whatever the client currently has in memory",
+// which meant a stale tab could hand back a board still carrying the previous
+// game's rule-spawned pieces.
+// - slot: unique identifier (1-32); rules SPAWN extra pieces at slot 33+
+// - col/row: 0-7, row 0 is the top (black's back rank), col 0 is the A file
+
+export const STARTING_PIECES = [
+    // White back rank (row 7)
+    { slot: '1', label: 'White Rook 1', color: 'white', image: 'White Rook 1.png', col: 0, row: 7 },
+    { slot: '2', label: 'White Knight 1', color: 'white', image: 'White Knight 1.png', col: 1, row: 7 },
+    { slot: '3', label: 'White Bishop 1', color: 'white', image: 'White Bishop 1.png', col: 2, row: 7 },
+    { slot: '4', label: 'White Queen', color: 'white', image: 'White Queen 1.png', col: 3, row: 7 },
+    { slot: '5', label: 'White King', color: 'white', image: 'White King 1.png', col: 4, row: 7 },
+    { slot: '6', label: 'White Bishop 2', color: 'white', image: 'White Bishop 2.png', col: 5, row: 7 },
+    { slot: '7', label: 'White Knight 2', color: 'white', image: 'White Knight 2.png', col: 6, row: 7 },
+    { slot: '8', label: 'White Rook 2', color: 'white', image: 'White Rook 2.png', col: 7, row: 7 },
+    // White pawns (row 6)
+    { slot: '9', label: 'White Pawn 1', color: 'white', image: 'White Pawn 1.png', col: 0, row: 6 },
+    { slot: '10', label: 'White Pawn 2', color: 'white', image: 'White Pawn 2.png', col: 1, row: 6 },
+    { slot: '11', label: 'White Pawn 3', color: 'white', image: 'White Pawn 3.png', col: 2, row: 6 },
+    { slot: '12', label: 'White Pawn 4', color: 'white', image: 'White Pawn 4.png', col: 3, row: 6 },
+    { slot: '13', label: 'White Pawn 5', color: 'white', image: 'White Pawn 5.png', col: 4, row: 6 },
+    { slot: '14', label: 'White Pawn 6', color: 'white', image: 'White Pawn 6.png', col: 5, row: 6 },
+    { slot: '15', label: 'White Pawn 7', color: 'white', image: 'White Pawn 7.png', col: 6, row: 6 },
+    { slot: '16', label: 'White Pawn 8', color: 'white', image: 'White Pawn 8.png', col: 7, row: 6 },
+    // Black pawns (row 1)
+    { slot: '17', label: 'Black Pawn 1', color: 'black', image: 'Black Pawn 1.png', col: 0, row: 1 },
+    { slot: '18', label: 'Black Pawn 2', color: 'black', image: 'Black Pawn 2.png', col: 1, row: 1 },
+    { slot: '19', label: 'Black Pawn 3', color: 'black', image: 'Black Pawn 3.png', col: 2, row: 1 },
+    { slot: '20', label: 'Black Pawn 4', color: 'black', image: 'Black Pawn 4.png', col: 3, row: 1 },
+    { slot: '21', label: 'Black Pawn 5', color: 'black', image: 'Black Pawn 5.png', col: 4, row: 1 },
+    { slot: '22', label: 'Black Pawn 6', color: 'black', image: 'Black Pawn 6.png', col: 5, row: 1 },
+    { slot: '23', label: 'Black Pawn 7', color: 'black', image: 'Black Pawn 7.png', col: 6, row: 1 },
+    { slot: '24', label: 'Black Pawn 8', color: 'black', image: 'Black Pawn 8.png', col: 7, row: 1 },
+    // Black back rank (row 0)
+    { slot: '25', label: 'Black Rook 1', color: 'black', image: 'Black Rook 1.png', col: 0, row: 0 },
+    { slot: '26', label: 'Black Knight 1', color: 'black', image: 'Black Knight 1.png', col: 1, row: 0 },
+    { slot: '27', label: 'Black Bishop 1', color: 'black', image: 'Black Bishop 1.png', col: 2, row: 0 },
+    { slot: '28', label: 'Black Queen', color: 'black', image: 'Black Queen 1.png', col: 3, row: 0 },
+    { slot: '29', label: 'Black King', color: 'black', image: 'Black King 1.png', col: 4, row: 0 },
+    { slot: '30', label: 'Black Bishop 2', color: 'black', image: 'Black Bishop 2.png', col: 5, row: 0 },
+    { slot: '31', label: 'Black Knight 2', color: 'black', image: 'Black Knight 2.png', col: 6, row: 0 },
+    { slot: '32', label: 'Black Rook 2', color: 'black', image: 'Black Rook 2.png', col: 7, row: 0 },
+];
+
+// True for pieces from the standard starting 32 (rule-spawned pieces are 33+)
+export const isOriginalSlot = (slot) => Number(slot) <= 32;
+
+// Builds a pristine { slot: piece } map in the shape the engine expects
+export const createStartingPieces = () => {
+    const pieces = {};
+    for (const config of STARTING_PIECES) {
+        pieces[config.slot] = {
+            slot: config.slot,
+            label: config.label,
+            color: config.color,
+            image: config.image,
+            initialImage: config.image,
+            position: { col: config.col, row: config.row },
+            initialPosition: { col: config.col, row: config.row },
+            captured: false,
+            emojis: [],
+            moved: false,
+        };
+    }
+    return pieces;
+};
+
+// =============================================================================
 // PIECE STATUS EMOJIS
 // =============================================================================
 // Statuses are stored on pieces as name strings; the engine enforces the ones
