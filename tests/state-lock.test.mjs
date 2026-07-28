@@ -7,7 +7,7 @@
 // mutations are now serialized.
 
 import assert from 'node:assert/strict';
-import { withStateLock, REDIS_STATE_LOCK } from '../api/_lib/redis.js';
+import { withStateLock, isStaleBoardWrite, REDIS_STATE_LOCK } from '../api/_lib/redis.js';
 
 let testCount = 0;
 let failCount = 0;
@@ -115,6 +115,33 @@ await test('work still runs when Redis cannot hand out the lock', async () => {
     let ran = false;
     await withStateLock(async () => { ran = true; }, { client: brokenClient });
     assert.equal(ran, true, 'a lock failure must not swallow the player\'s move');
+});
+
+// =============================================================================
+// The lock only serializes writes that go through it. A client posting its
+// whole board mirror (Sandbox Mode) can still be built on a board that has
+// since been replaced, so those writes name the version they came from.
+// =============================================================================
+
+console.log('\n== stale board writes ==');
+
+await test('a write built on the current board is accepted', () => {
+    assert.equal(isStaleBoardWrite(7, 7), false);
+});
+
+await test('a write built on an older board is refused', () => {
+    // A move landed while the randomizer click was in flight
+    assert.equal(isStaleBoardWrite(6, 7), true);
+});
+
+await test('a write that names no version is refused once the board exists', () => {
+    assert.equal(isStaleBoardWrite(undefined, 7), true);
+    assert.equal(isStaleBoardWrite(null, 7), true);
+});
+
+await test('any write seeds a database that has never been written to', () => {
+    assert.equal(isStaleBoardWrite(0, 0), false);
+    assert.equal(isStaleBoardWrite(undefined, 0), false);
 });
 
 console.log(`\n${testCount - failCount}/${testCount} tests passed`);

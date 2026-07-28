@@ -157,7 +157,42 @@ export const REDIS_BOARD_CURRENT = 'board:status';
 export const REDIS_TURNS_CURRENT = 'rules:status';
 export const REDIS_UNDO_STACK = 'undo:stack';
 export const REDIS_STATE_LOCK = 'state:lock';
+export const REDIS_BOARD_VERSION = 'board:version';
 export const UNDO_STACK_MAX = 50;
+
+/*
+BOARD VERSION
+
+Sandbox Mode still posts a client's COMPLETE board mirror, and that write is
+blind: a tab whose mirror was a moment out of date used to overwrite whatever
+had landed in between, which looks exactly like the game silently undoing
+somebody's move.
+
+So every board write bumps this counter (always inside the state lock), every
+board GET and broadcast carries the new value, and a client's full-board write
+must name the version it was built from. A write built on an older board is
+refused and that client resyncs instead of clobbering.
+
+Server-authoritative actions (/api/game, rule selection, undo) do not need to
+send a version: they rebuild the board from the state they just read under the
+same lock, so they are never stale by construction.
+*/
+export async function bumpBoardVersion(client = redis) {
+    return await client.incr(REDIS_BOARD_VERSION);
+}
+
+export async function readBoardVersion(client = redis) {
+    const value = await client.get(REDIS_BOARD_VERSION);
+    return Number(value) || 0;
+}
+
+// True when a client's whole-board write was built on a board that has since
+// been replaced. Version 0 means nothing has ever been written, so a first
+// write is allowed through to seed an empty database.
+export const isStaleBoardWrite = (clientVersion, currentVersion) => {
+    if (!currentVersion) return false;
+    return Number(clientVersion) !== currentVersion;
+};
 
 /*
 STATE LOCK

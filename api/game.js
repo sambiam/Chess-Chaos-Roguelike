@@ -17,7 +17,7 @@ Actions (POST body: { clientSecret, userId, action, payload }):
     LEGAL_MOVES  payload: { } — returns current legal moves (for debugging)
 */
 
-import { redis, redisUnavailable, withStateLock, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX } from './_lib/redis.js';
+import { redis, redisUnavailable, withStateLock, bumpBoardVersion, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX } from './_lib/redis.js';
 import pusher from './_lib/pusher.js';
 import { checkPassword } from './auth.js';
 import {
@@ -304,7 +304,11 @@ export default async function handler(req, res) {
 
                 return {
                     result,
-                    broadcast: { newBoard, newTurn, events: game.events, ruleJustExpired },
+                    broadcast: {
+                        newBoard, newTurn, events: game.events, ruleJustExpired,
+                        // Any client holding an older board must not overwrite this
+                        boardVersion: await bumpBoardVersion(),
+                    },
                 };
             }
 
@@ -317,8 +321,9 @@ export default async function handler(req, res) {
             await Promise.all([
                 pusher.trigger(CHANNEL_NAME, EVENT_TYPE_BOARD_UPDATE, {
                     newState: broadcast.newBoard, events: broadcast.events,
-                    // No userId here on purpose: EVERY client (including the
-                    // one that acted) applies the authoritative server state
+                    boardVersion: broadcast.boardVersion,
+                    // No userId/tabId here on purpose: EVERY client (including
+                    // the one that acted) applies the authoritative server state
                 }),
                 pusher.trigger(CHANNEL_NAME, EVENT_TYPE_TURN_UPDATE, {
                     newTurn: broadcast.newTurn, events: broadcast.events,

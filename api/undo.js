@@ -1,4 +1,4 @@
-import {redis, redisUnavailable, withStateLock, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK} from './_lib/redis.js';
+import {redis, redisUnavailable, withStateLock, bumpBoardVersion, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK} from './_lib/redis.js';
 import pusher from './_lib/pusher.js';
 import { checkPassword } from './auth.js';
 
@@ -29,6 +29,7 @@ export default async function handler(req, res) {
 
         // Pop the snapshot and restore it under the state lock, so an undo
         // cannot be overwritten by a move that read the state before it landed
+        let boardVersion = null;
         const snapshot = await withStateLock(async () => {
             const popped = await redis.lpop(REDIS_UNDO_STACK);
             if (!popped) return null;
@@ -49,6 +50,10 @@ export default async function handler(req, res) {
                 .hset(REDIS_TURNS_CURRENT, turnEntries)
                 .exec();
 
+            // Restoring an old board is still a NEW version — a client must not
+            // be able to write the undone board back over it
+            boardVersion = await bumpBoardVersion();
+
             return popped;
         });
         if (!snapshot) {
@@ -66,6 +71,7 @@ export default async function handler(req, res) {
         await Promise.all([
             pusher.trigger(CHANNEL_NAME, 'board-event', {
                 newState: snapshot.boardState,
+                boardVersion,
             }),
             pusher.trigger(CHANNEL_NAME, 'turn-event', {
                 newTurn: snapshot.turnState,

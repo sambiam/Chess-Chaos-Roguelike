@@ -27,6 +27,15 @@ let pusherClient = null;
 let pusherChannel = null;
 let hasConnectedBefore = false;   // set once we have been online at least once
 
+// The board version we last saw from the server. Writes that replace the whole
+// board (Sandbox Mode) quote it back so the server can refuse a write built on
+// a board that has since moved on.
+let boardVersion = 0;
+export const getBoardVersion = () => boardVersion;
+export const setBoardVersion = (version) => {
+    if (typeof version === 'number') boardVersion = version;
+};
+
 export function initNetwork({ clientSecret, onStateChanged }) {
     _clientSecret = clientSecret;
     _onStateChanged = onStateChanged;
@@ -112,6 +121,7 @@ export const pullServerBoardState = async () => {
         notifyStateChanged();
         return;
     }
+    setBoardVersion(result.boardVersion);
     syncBoardWithServer(result.boardState);
     notifyStateChanged();
 }
@@ -136,6 +146,9 @@ const handleBoardUpdate = (boardData) => {
     // — every client (including the actor) applies the server state. Neither
     // does a sandbox update the server had to sanitize: the tab that sent it is
     // the one holding stale pieces, so it needs the corrected board most.
+    // Track the version even for our own echo: it is what the next full-board
+    // write has to quote
+    setBoardVersion(boardData.boardVersion);
     if (boardData.tabId && boardData.tabId === getTabId()) {
         console.log("Received a Pusher piece move event, but we initiated it, so ignoring it");
         return;
@@ -145,9 +158,15 @@ const handleBoardUpdate = (boardData) => {
     notifyStateChanged();
 };
 
+// Applies a board payload from the server. The payload is normally the whole
+// board, but some events carry only a field or two (the randomizer highlight),
+// so anything that means "the server no longer has this" is only acted on when
+// the payload actually covers it — otherwise a highlight would look like an
+// empty board and wipe every spawned piece.
 const syncBoardWithServer = (newState) => {
     let playedCaptureSound = false;
     const serverSlots = new Set();
+    const isFullBoard = Object.keys(newState).some(key => /^\d+$/.test(key));
     for (const [slot, newPiece] of Object.entries(newState)) {
         if (slot === 'boardEffects' || slot === 'highlightedSquare' || slot === 'selectedSlot') continue;
         serverSlots.add(slot);
@@ -192,17 +211,19 @@ const syncBoardWithServer = (newState) => {
     }
 
     // Remove spawned pieces that no longer exist server-side (post-reset)
-    for (const slot of Object.keys(state.pieces)) {
-        if (Number(slot) > 32 && !serverSlots.has(slot)) {
-            removePieceDOM(slot);
-            delete state.pieces[slot];
+    if (isFullBoard) {
+        for (const slot of Object.keys(state.pieces)) {
+            if (Number(slot) > 32 && !serverSlots.has(slot)) {
+                removePieceDOM(slot);
+                delete state.pieces[slot];
+            }
         }
     }
 
     refreshAllReviveButtons();
 
     // Sync selection from server
-    const serverSelectedSlot = newState.selectedSlot ?? null;
+    const serverSelectedSlot = 'selectedSlot' in newState ? (newState.selectedSlot ?? null) : state.selectedSlot;
     if (state.selectedSlot !== serverSelectedSlot) {
         if (state.selectedSlot) {
             updatePieceSelection(state.pieces[state.selectedSlot], false);

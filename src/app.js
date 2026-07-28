@@ -39,6 +39,8 @@ import {
     initNetwork,
     pullServerBoardState,
     pullServerTurnState,
+    getBoardVersion,
+    setBoardVersion,
 } from './network.js';
 import { apiGet, apiPost, getUserId, getTabId, playCaptureSounds } from './utils.js';
 import { startPageBackground } from './animated-bg.js';
@@ -125,12 +127,31 @@ const postBoardState = async (extra = {}) => {
         userId: getUserId(),
         // Per-tab, so the echo we skip is genuinely our own (see getTabId)
         tabId: getTabId(),
+        // The board this write was built from — the server refuses it if the
+        // real board has moved on since
+        boardVersion: getBoardVersion(),
         newState: getSimpleBoardState(),
         ...extra,
     });
-    // The server rejected our board because it was built from pieces it no
-    // longer has — we are the stale one, so take its board instead of ours
+    setBoardVersion(result?.boardVersion);
+    // The server rejected our board: either it was out of date or it was built
+    // from pieces the server no longer has. Either way we are the stale one, so
+    // take its board instead of ours.
     if (result && result.resync) await pullServerBoardState();
+    return result;
+};
+
+// The randomizer highlight is a cosmetic overlay, not a board edit: send just
+// that field. Posting the whole mirror for it could write a stale board over a
+// move that had landed a moment earlier.
+const postHighlight = async (highlight) => {
+    const result = await apiPost('/api/board-state', {
+        clientSecret,
+        userId: getUserId(),
+        tabId: getTabId(),
+        highlight: highlight ?? null,
+    });
+    setBoardVersion(result?.boardVersion);
     return result;
 };
 
@@ -551,6 +572,7 @@ async function initializeApp() {
     // Wire up the view layer with shared references
     initView({
         postBoardState,
+        postHighlight,
         zoomPan,
         boardSize: BOARD_SIZE,
         // Gate rule-card clicks: only the player to move may pick (when seats exist)

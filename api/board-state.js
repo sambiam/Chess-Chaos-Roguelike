@@ -13,10 +13,13 @@ Note: Redis can only store strings as values
 So each each value is a stringify'ed JSON object, rather than an actual JSON object
 */
 
-import {redis, redisUnavailable, withStateLock, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX} from './_lib/redis.js';
+import {redis, redisUnavailable, withStateLock, bumpBoardVersion, readBoardVersion, isStaleBoardWrite, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX} from './_lib/redis.js';
 import pusher from './_lib/pusher.js';
 import { checkPassword } from './auth.js';
 import { filterResurrectedSlots, isPieceSlot } from '../shared/defs.js';
+
+const CHANNEL_NAME = 'chess-events';
+const EVENT_TYPE_BOARD_UPDATE = 'board-event';
 
 export default async function handler(req, res) {
 
@@ -40,8 +43,12 @@ export default async function handler(req, res) {
         }
 
         try {
-            // Return the full hash of the board state
-            const rawBoardState = await redis.hgetall(REDIS_BOARD_CURRENT);
+            // Return the full hash of the board state, plus the version it is
+            // at — clients quote that back when they write the whole board
+            const [rawBoardState, boardVersion] = await Promise.all([
+                redis.hgetall(REDIS_BOARD_CURRENT),
+                readBoardVersion(),
+            ]);
             // Logging the whole hash printed ~9KB per page load; the slot list is
             // what actually helps when debugging state that should have been reset
             console.log(
@@ -54,6 +61,7 @@ export default async function handler(req, res) {
             return res.status(200).json({
                 success: true,
                 boardState: rawBoardState,
+                boardVersion,
                 message: 'board status retrieved'
             });
         } catch (error) {
@@ -68,7 +76,7 @@ export default async function handler(req, res) {
 
         try {
 
-            const { clientSecret, userId, tabId, newState, skipSnapshot } = req.body;
+            const { clientSecret, userId, tabId, newState, skipSnapshot, highlight, boardVersion } = req.body;
 
             // First check the client's password against the real password on Vercel
             if (!checkPassword(clientSecret)) {
@@ -76,6 +84,36 @@ export default async function handler(req, res) {
                 return res.status(401).json({
                     success: false,
                     message: "Invalid password, get outta here ya rascal"
+                });
+            }
+
+            /*
+            The randomizer's square highlight is a cosmetic overlay that lives
+            in the board hash so every client can see it. It used to be shared
+            by POSTing the client's ENTIRE board mirror, which meant clicking
+            "random square" could write a whole stale board over a move that
+            had just landed. Write the one field it actually owns instead.
+            */
+            if (highlight !== undefined) {
+                const nextVersion = await withStateLock(async () => {
+                    await redis.hset(REDIS_BOARD_CURRENT, {
+                        highlightedSquare: JSON.stringify(highlight ?? null),
+                    });
+                    return await bumpBoardVersion();
+                });
+
+                await pusher.trigger(CHANNEL_NAME, EVENT_TYPE_BOARD_UPDATE, {
+                    userId: userId,
+                    tabId: tabId ?? null,
+                    boardVersion: nextVersion,
+                    // A partial board event: pieces are untouched
+                    newState: { highlightedSquare: highlight ?? null },
+                });
+
+                return res.status(200).json({
+                    success: true,
+                    message: 'Highlight shared',
+                    boardVersion: nextVersion,
                 });
             }
 
@@ -128,13 +166,23 @@ export default async function handler(req, res) {
             //
             // The whole read-modify-write runs under the state lock so it
             // cannot interleave with a move being processed in /api/game.
-            const { savedState, droppedSlots } = await withStateLock(async () => {
+            const { savedState, droppedSlots, stale, nextVersion } = await withStateLock(async () => {
                 // Grab the current board (and, unless this is a selection-only
                 // update, the turn state for the undo snapshot)
-                const [prevBoardState, prevTurnState] = await Promise.all([
+                const [prevBoardState, prevTurnState, currentVersion] = await Promise.all([
                     redis.hgetall(REDIS_BOARD_CURRENT),
                     skipSnapshot ? Promise.resolve(null) : redis.hgetall(REDIS_TURNS_CURRENT),
+                    readBoardVersion(),
                 ]);
+
+                // This POST replaces the WHOLE board, so it is only safe if it
+                // was built from the board that is actually current
+                if (isStaleBoardWrite(boardVersion, currentVersion)) {
+                    console.warn(
+                        `Rejecting a stale board write: client is at version ${boardVersion}, server is at ${currentVersion}`,
+                    );
+                    return { savedState: null, droppedSlots: [], stale: true };
+                }
 
                 // Clients may update pieces, never invent them
                 const { board, dropped } = filterResurrectedSlots(newState, prevBoardState || {});
@@ -168,14 +216,16 @@ export default async function handler(req, res) {
                 pipeline.hset(REDIS_BOARD_CURRENT, stringifiedState);
                 await pipeline.exec();
 
-                return { savedState: board, droppedSlots: dropped };
+                return { savedState: board, droppedSlots: dropped, nextVersion: await bumpBoardVersion() };
             });
 
             if (!savedState) {
                 return res.status(409).json({
                     success: false,
                     resync: true,   // tells the client to pull the real board
-                    message: 'That board state only contained pieces the server no longer has — resyncing',
+                    message: stale
+                        ? 'Your board was out of date — resyncing'
+                        : 'That board state only contained pieces the server no longer has — resyncing',
                 });
             }
 
@@ -183,11 +233,10 @@ export default async function handler(req, res) {
             // tabId lets the sending TAB skip its own echo — but when we had to
             // drop slots the sender is out of date, so we deliberately leave it
             // off and let the sanitized board heal it too.
-            const CHANNEL_NAME = 'chess-events';
-            const EVENT_TYPE_BOARD_UPDATE = 'board-event';
             await pusher.trigger(CHANNEL_NAME, EVENT_TYPE_BOARD_UPDATE, {
                 userId: userId,
                 tabId: droppedSlots.length > 0 ? null : (tabId ?? null),
+                boardVersion: nextVersion,
                 newState: savedState,
             });
             console.log(`Triggered Pusher event for Channel:${CHANNEL_NAME} and EventType:${EVENT_TYPE_BOARD_UPDATE}`);
@@ -196,6 +245,7 @@ export default async function handler(req, res) {
             return res.status(200).json({
                 success: true,
                 message: `New board state successfully saved`,
+                boardVersion: nextVersion,
                 droppedSlots,
             });
         

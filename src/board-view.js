@@ -24,17 +24,20 @@ import { startBackground, stopBackground } from './animated-bg.js';
 // =============================================================================
 // Shared references injected by app.js during initialization.
 // - postBoardState: callback to send current board state to the server
+// - postHighlight: callback to share ONLY the randomizer highlight square
 // - zoomPan: viewport zoom/pan controller (for fitAndCenterContent calls)
 // - boardSize: board dimensions in pixels
 
 let _postBoardState = null;
+let _postHighlight = null;
 let _zoomPan = null;
 let _boardSize = 800;
 let _currentlyHaveRules = false;
 let _onRuleCardClick = null;
 
-export function initView({ postBoardState, zoomPan, boardSize, onRuleCardClick }) {
+export function initView({ postBoardState, postHighlight, zoomPan, boardSize, onRuleCardClick }) {
     _postBoardState = postBoardState;
+    _postHighlight = postHighlight;
     _zoomPan = zoomPan;
     _boardSize = boardSize;
     _onRuleCardClick = onRuleCardClick;
@@ -322,7 +325,8 @@ const hideHighlight = () => {
 const showHighlight = async (col, row) => {
     state.highlightedSquare = { col, row, timestamp: Date.now() };
     showHighlightVisual(col, row);
-    await _postBoardState();
+    // Only the highlight travels — this is an overlay, not a board edit
+    await _postHighlight(state.highlightedSquare);
 };
 
 export const syncHighlightFromServer = (serverHighlight) => {
