@@ -13,11 +13,15 @@ Note: Redis can only store strings as values
 So each each value is a stringify'ed JSON object, rather than an actual JSON object
 */
 
-import {redis, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX} from './_lib/redis.js';
+import {redis, redisUnavailable, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX} from './_lib/redis.js';
 import pusher from './_lib/pusher.js';
 import { checkPassword } from './auth.js';
 
 export default async function handler(req, res) {
+
+    // Without Redis credentials every call below fails on an empty URL —
+    // say so plainly instead of returning a mystery 500
+    if (redisUnavailable(res)) return;
 
     // GET BOARD STATE
     if (req.method === 'GET') {

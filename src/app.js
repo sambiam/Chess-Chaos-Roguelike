@@ -49,7 +49,6 @@ import { getAllLegalMoves } from '../shared/engine.js';
 // =============================================================================
 
 const BOARD_SIZE = 800;
-const ZOOM_SCROLL_MULTIPLIER = 0.7;
 
 // =============================================================================
 // AUTHENTICATION
@@ -108,8 +107,8 @@ document.addEventListener('keydown', (e) => {
 // VIEWPORT SETUP
 // =============================================================================
 
+// The board is fixed: this only fits/centers it, it does not pan or zoom
 const zoomPan = createZoomPan(viewport, stage, {
-    zoomMultiplier: ZOOM_SCROLL_MULTIPLIER,
     contentSize: BOARD_SIZE,
 });
 
@@ -219,32 +218,34 @@ let lastRightClickSquare = null;
 const DOUBLE_CLICK_THRESHOLD = 400;
 
 // =============================================================================
-// VIEWPORT INPUT (Right-Click)
+// VIEWPORT INPUT (Click)
 // =============================================================================
-// Right-click: select a piece, move the selected piece, or (sandbox only)
-// open the manual piece context menu with a double right-click.
+// Left-click (and right-click, kept for muscle memory): select a piece, move the
+// selected piece, or — sandbox only, on a double right-click — open the manual
+// piece context menu. The board itself never moves in response to input.
 
-viewport.addEventListener('contextmenu', async event => {
-    event.preventDefault();
+const handleBoardInteraction = async (event, { rightClick = false } = {}) => {
     const targetSquare = screenToSquare(event.clientX, event.clientY);
 
     // Double right-click detection (manual tools — Sandbox Mode only)
-    const now = Date.now();
-    const isDoubleRightClick =
-        (now - lastRightClickTime < DOUBLE_CLICK_THRESHOLD) &&
-        lastRightClickSquare && targetSquare &&
-        lastRightClickSquare.col === targetSquare.col &&
-        lastRightClickSquare.row === targetSquare.row;
-    lastRightClickTime = now;
-    lastRightClickSquare = targetSquare;
+    if (rightClick) {
+        const now = Date.now();
+        const isDoubleRightClick =
+            (now - lastRightClickTime < DOUBLE_CLICK_THRESHOLD) &&
+            lastRightClickSquare && targetSquare &&
+            lastRightClickSquare.col === targetSquare.col &&
+            lastRightClickSquare.row === targetSquare.row;
+        lastRightClickTime = now;
+        lastRightClickSquare = targetSquare;
 
-    if (isDoubleRightClick && targetSquare && inSandboxMode()) {
-        const piece = getPieceAt(targetSquare.col, targetSquare.row);
-        const prevSlot = state.selectedSlot;
-        if (piece) handleSelectPiece(piece.slot);
-        showContextMenu(event.clientX, event.clientY, targetSquare, piece);
-        if (state.selectedSlot !== prevSlot) await sendSelectionUpdate();
-        return;
+        if (isDoubleRightClick && targetSquare && inSandboxMode()) {
+            const piece = getPieceAt(targetSquare.col, targetSquare.row);
+            const prevSlot = state.selectedSlot;
+            if (piece) handleSelectPiece(piece.slot);
+            showContextMenu(event.clientX, event.clientY, targetSquare, piece);
+            if (state.selectedSlot !== prevSlot) await sendSelectionUpdate();
+            return;
+        }
     }
 
     dismissPieceContextMenu();
@@ -333,10 +334,17 @@ viewport.addEventListener('contextmenu', async event => {
     }
 
     await handleEnforcedMove(state.selectedSlot, targetSquare.col, targetSquare.row);
+};
+
+viewport.addEventListener('click', event => handleBoardInteraction(event));
+
+viewport.addEventListener('contextmenu', event => {
+    event.preventDefault();
+    return handleBoardInteraction(event, { rightClick: true });
 });
 
 // =============================================================================
-// CHOICE HANDLING (left-click friendly)
+// CHOICE HANDLING
 // =============================================================================
 
 const tryResolveChoiceClick = async (targetSquare) => {
@@ -353,20 +361,6 @@ const myPendingChoice = () => {
     const seat = mySeat();
     return (turns.pendingChoices || []).find(c => c.color === seat) || null;
 };
-
-// Left-click resolves choices too (with a small drag guard so panning is safe)
-let leftClickStart = null;
-viewport.addEventListener('mousedown', event => {
-    if (event.button === 0) leftClickStart = { x: event.clientX, y: event.clientY };
-});
-viewport.addEventListener('mouseup', async event => {
-    if (event.button !== 0 || !leftClickStart) return;
-    const moved = Math.abs(event.clientX - leftClickStart.x) + Math.abs(event.clientY - leftClickStart.y);
-    leftClickStart = null;
-    if (moved > 6 || inSandboxMode()) return;
-    const targetSquare = screenToSquare(event.clientX, event.clientY);
-    if (targetSquare) await tryResolveChoiceClick(targetSquare);
-});
 
 // =============================================================================
 // PLAY UI REFRESH (seats, choices, pass button, game over)
@@ -537,6 +531,10 @@ async function initializeApp() {
     startPageBackground(document.body);
 
     applyModeVisuals();
+
+    // Draw the seat buttons (and the rest of the play UI) up front, so the
+    // board is playable-looking even if the server never answers
+    refreshPlayUI();
 
     // Initialize server connection
     initNetwork({ clientSecret, onStateChanged: refreshPlayUI });

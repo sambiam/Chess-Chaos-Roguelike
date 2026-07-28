@@ -1,8 +1,10 @@
-import {redis, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK} from './_lib/redis.js';
+import {redis, redisUnavailable, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK} from './_lib/redis.js';
 import pusher from './_lib/pusher.js';
 import { checkPassword } from './auth.js';
 
 export default async function handler(req, res) {
+
+    if (redisUnavailable(res)) return;
 
     if (req.method !== 'POST') {
         return res.status(405).json({

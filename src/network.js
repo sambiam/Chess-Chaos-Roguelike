@@ -87,10 +87,19 @@ function initializePusher() {
 // SERVER STATE PULLING
 // =============================================================================
 
+// Surfaces a failed server call to the player instead of only the console —
+// a misconfigured backend used to look like "the game is just frozen"
+const reportServerFailure = (what, result) => {
+    const detail = result?.message || result?.error || 'the server did not respond';
+    console.log(`Failed to pull ${what} from the server:`, detail);
+    showEvents([`Could not load ${what}: ${detail}`]);
+};
+
 export const pullServerBoardState = async () => {
     const result = await apiGet('/api/board-state', {clientSecret: _clientSecret});
     if (!result.success) {
-        console.log("Failed to pull board state from the server");
+        reportServerFailure('the board state', result);
+        notifyStateChanged();
         return;
     }
     syncBoardWithServer(result.boardState);
@@ -100,7 +109,8 @@ export const pullServerBoardState = async () => {
 export const pullServerTurnState = async () => {
     const result = await apiGet('/api/turns', {clientSecret: _clientSecret, userId: getUserId()});
     if (!result.success) {
-        console.log("Failed to pull turn state from the server");
+        reportServerFailure('the turn state', result);
+        notifyStateChanged();
         return;
     }
     handleTurnUpdate(result.turnState);

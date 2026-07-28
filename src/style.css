@@ -267,16 +267,17 @@ body {
     border: 2px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
-    cursor: grab;
-    /* Prevent native drag/select behavior that interferes with pan/zoom */
+    /* The board is fixed in place — clicks are moves, not camera controls */
+    cursor: pointer;
+    /* Prevent native drag/select behavior on the pieces */
     user-select: none;
     -webkit-user-select: none;
     -webkit-user-drag: none;
-    box-shadow: 
+    box-shadow:
         0 8px 32px rgba(0, 0, 0, 0.5),
         inset 0 1px 0 rgba(255, 255, 255, 0.05),
         inset 0 -2px 10px rgba(0, 0, 0, 0.3);
-    
+
 }
 
 .viewport.ignoring-turns {
@@ -291,10 +292,6 @@ body {
     /* Prevent all children from triggering native drag */
     -webkit-user-drag: none;
     user-select: none;
-}
-
-.viewport.dragging {
-    cursor: grabbing;
 }
 
 .stage {
@@ -318,12 +315,11 @@ body {
     border: 2px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
-    cursor: grab;
-    /* Prevent native drag/select behavior that interferes with pan/zoom */
+    /* Prevent native drag/select behavior on the rule cards */
     user-select: none;
     -webkit-user-select: none;
     -webkit-user-drag: none;
-    box-shadow: 
+    box-shadow:
         0 8px 32px rgba(0, 0, 0, 0.5),
         inset 0 1px 0 rgba(255, 255, 255, 0.05),
         inset 0 -2px 10px rgba(0, 0, 0, 0.3);

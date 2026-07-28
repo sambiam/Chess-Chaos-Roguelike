@@ -15,7 +15,7 @@ Actions (POST body: { clientSecret, userId, action, payload }):
     LEGAL_MOVES  payload: { } — returns current legal moves (for debugging)
 */
 
-import { redis, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX } from './_lib/redis.js';
+import { redis, redisUnavailable, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX } from './_lib/redis.js';
 import pusher from './_lib/pusher.js';
 import { checkPassword } from './auth.js';
 import {
@@ -37,6 +37,8 @@ const EVENT_TYPE_BOARD_UPDATE = 'board-event';
 const EVENT_TYPE_TURN_UPDATE = 'turn-event';
 
 export default async function handler(req, res) {
+    if (redisUnavailable(res)) return;
+
     if (req.method !== 'POST') {
         return res.status(405).json({ success: false, error: 'Method not allowed. POST an action.' });
     }

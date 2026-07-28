@@ -1,8 +1,10 @@
 // =============================================================================
-// VIEWPORT / ZOOM-PAN SYSTEM
+// VIEWPORT / BOARD FITTING
 // =============================================================================
-// This system allows the user to pan (drag) and zoom the chess board within
-// a fixed viewport area. Here's how it works:
+// The board is FIXED in place. It is scaled once to fit the viewport and
+// centered there, and it stays put: dragging with the mouse does not pan it and
+// scrolling the wheel does not zoom it. Mouse input over the board belongs to
+// the game (selecting and moving pieces), not to the camera.
 //
 // STRUCTURE:
 //   - viewport: The visible window (fixed size, acts as a "camera frame")
@@ -11,40 +13,27 @@
 //
 // KEY CONCEPTS:
 //   - tx, ty: Translation offsets (how far the stage is shifted in pixels)
-//   - scale: Zoom level (1 = 100%, 2 = 200%, 0.5 = 50%)
-//   - The transform is applied to the stage, making everything inside it
-//     move and scale together as a single unit
+//   - scale: Fit factor chosen so the whole board is visible in the viewport
 //
 // COORDINATE SPACES:
 //   - Screen coords: Where mouse events occur (relative to browser window)
 //   - Viewport coords: Position within the viewport element
-//   - World coords: Position on the actual board (unaffected by zoom/pan)
+//   - World coords: Position on the actual board (unaffected by the fit transform)
 //
-// THE MAGIC - apply():
-//   This function sets: stage.style.transform = translate(tx, ty) scale(scale)
-//   - translate moves the entire stage left/right/up/down
-//   - scale zooms everything in the stage from the top-left corner (0,0)
-//   - Together, these let you pan around and zoom into any part of the board
+// screenToWorld()/toGridSquare() invert the transform, which is how a click
+// anywhere on screen is mapped back to the board square underneath it.
 
-export function createZoomPan(viewport, stage, { zoomMultiplier = 0.7, contentSize = 800 } = {}) {
-    const MIN_SCALE = 0.4;   // Maximum zoom out (40%)
-    const MAX_SCALE = 3.5;   // Maximum zoom in (350%)
-    let scale = 1;           // Current zoom level
+export function createZoomPan(viewport, stage, { contentSize = 800 } = {}) {
+    const MIN_SCALE = 0.4;   // Smallest fit factor we will apply
+    const MAX_SCALE = 3.5;   // Largest fit factor we will apply
+    let scale = 1;           // Current fit factor
     let tx = 0;              // Horizontal offset in pixels
     let ty = 0;              // Vertical offset in pixels
-    let dragging = false;    // Is user currently dragging?
-    let lastX = 0;           // Last mouse X position (for drag delta calculation)
-    let lastY = 0;           // Last mouse Y position
-    let hasInteracted = false; // Tracks if user has manually panned/zoomed
 
     // Constrains a value between min and max
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
-    // Marks that user has interacted with the viewport
-    const markInteraction = () => { hasInteracted = true; };
-
     // CORE FUNCTION: Applies the current transform to the stage element
-    // This single line is what makes all zooming and panning visually happen
     const apply = () => {
         stage.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
     };
@@ -60,19 +49,6 @@ export function createZoomPan(viewport, stage, { zoomMultiplier = 0.7, contentSi
     const screenToWorld = (sx, sy) => {
         const point = screenToViewport(sx, sy);
         return { x: (point.x - tx) / scale, y: (point.y - ty) / scale };
-    };
-
-    // Zooms in/out centered on a specific screen position
-    // This keeps the point under the cursor stationary while zooming
-    const zoomAround = (sx, sy, factor) => {
-        markInteraction();
-        const world = screenToWorld(sx, sy);
-        const newScale = clamp(scale * factor, MIN_SCALE, MAX_SCALE);
-        // Adjust translation so the world point stays under the cursor
-        tx += world.x * (scale - newScale);
-        ty += world.y * (scale - newScale);
-        scale = newScale;
-        apply();
     };
 
     // Directly sets the transform values
@@ -100,20 +76,17 @@ export function createZoomPan(viewport, stage, { zoomMultiplier = 0.7, contentSi
         const scaleToFitHeight = (rect.height - padding) / contentHeight;
         // Use the smaller scale to ensure content fits in both dimensions
         const fitScale = Math.min(scaleToFitWidth, scaleToFitHeight, 1.1); // Doug: if we want to prevent zooming in past 100%, set the value at 1
-        const clampedScale = clamp(fitScale, MIN_SCALE, MAX_SCALE);
-        
-        // Set the scale and center the content
-        scale = clampedScale;
+        scale = clamp(fitScale, MIN_SCALE, MAX_SCALE);
+
         tx = Math.floor((rect.width - contentWidth * scale) / 2);
         ty = Math.floor((rect.height - contentHeight * scale) / 2);
         apply();
     };
 
-    // Resets interaction state (called when board resets)
-    const resetInteractionState = () => { hasInteracted = false; };
-
-    // Checks if user has interacted with viewport
-    const getHasInteracted = () => hasInteracted;
+    // Kept for API compatibility: the board no longer has an interaction state,
+    // so it is always considered "untouched" and re-fits on layout changes.
+    const resetInteractionState = () => {};
+    const getHasInteracted = () => false;
 
     // Converts screen click position to grid square (col, row)
     // Generic helper for any grid-based content
@@ -126,63 +99,15 @@ export function createZoomPan(viewport, stage, { zoomMultiplier = 0.7, contentSi
     };
 
     // --- EVENT LISTENERS ---
-
-    // Prevent native drag behavior (fixes drag interference on images/elements)
+    // Only one: suppress the browser's native image drag so dragging across the
+    // board never picks up a piece sprite as a drag ghost. No pan, no zoom.
     viewport.addEventListener('dragstart', event => {
         event.preventDefault();
     });
 
-    // Mouse wheel: zoom in/out centered on cursor position
-    viewport.addEventListener('wheel', event => {
-        event.preventDefault();
-        const factor = Math.exp((-event.deltaY) * 0.0015 * zoomMultiplier);
-        zoomAround(event.clientX, event.clientY, factor);
-    }, { passive: false });
-
-    // Left mouse button: start dragging to pan
-    viewport.addEventListener('pointerdown', event => {
-        if (event.button !== 0) return;
-        event.preventDefault(); // Prevent text selection and native drag initiation
-        markInteraction();
-        dragging = true;
-        lastX = event.clientX;
-        lastY = event.clientY;
-        viewport.classList.add('dragging');
-        viewport.setPointerCapture(event.pointerId);
-    });
-
-    // Mouse move: pan the view while dragging
-    viewport.addEventListener('pointermove', event => {
-        if (!dragging) return;
-        tx += event.clientX - lastX;
-        ty += event.clientY - lastY;
-        lastX = event.clientX;
-        lastY = event.clientY;
-        apply();
-    });
-
-    const stopDragging = () => {
-        dragging = false;
-        viewport.classList.remove('dragging');
-    };
-
-    viewport.addEventListener('pointerup', event => {
-        if (event.button === 0) {
-            try { viewport.releasePointerCapture(event.pointerId); } catch {}
-            stopDragging();
-        }
-    });
-
-    viewport.addEventListener('lostpointercapture', stopDragging);
-
-    // Double-click: fit entire board to viewport and center
-    viewport.addEventListener('dblclick', () => {
-        fitAndCenterContent();
-    });
-
-    return { 
-        setTransform, 
-        screenToWorld, 
+    return {
+        setTransform,
+        screenToWorld,
         centerContent,
         fitAndCenterContent,
         resetInteractionState,
