@@ -13,7 +13,7 @@ Note: Redis can only store strings as values
 So each each value is a stringify'ed JSON object, rather than an actual JSON object
 */
 
-import {redis, redisUnavailable, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX} from './_lib/redis.js';
+import {redis, redisUnavailable, withStateLock, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX} from './_lib/redis.js';
 import pusher from './_lib/pusher.js';
 import { checkPassword } from './auth.js';
 
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
         // First check the client's password against the real password on Vercel
         const { clientSecret } = req.query;
         if (!checkPassword(clientSecret)) {
-            console.log("A client provided the wrong password, rejecting the Get Board State Request, password was ", clientSecret);
+            console.log("Rejecting a Get Board State request: wrong password");
             return res.status(401).json({
                 success: false,
                 message: "Invalid password, get outta here ya rascal"
@@ -41,7 +41,14 @@ export default async function handler(req, res) {
         try {
             // Return the full hash of the board state
             const rawBoardState = await redis.hgetall(REDIS_BOARD_CURRENT);
-            console.log("Here's the current Board State from DB:", rawBoardState);
+            // Logging the whole hash printed ~9KB per page load; the slot list is
+            // what actually helps when debugging state that should have been reset
+            console.log(
+                "Loaded board state from DB:",
+                Object.keys(rawBoardState || {}).filter(k => /^\d+$/.test(k)).length,
+                "pieces, slots:",
+                Object.keys(rawBoardState || {}).filter(k => /^\d+$/.test(k)).sort((a, b) => a - b).join(","),
+            );
             // Send board state to the client
             return res.status(200).json({
                 success: true,
@@ -64,7 +71,7 @@ export default async function handler(req, res) {
 
             // First check the client's password against the real password on Vercel
             if (!checkPassword(clientSecret)) {
-                console.log("A client provided the wrong password, rejecting the Get Board State Request, password was ", clientSecret);
+                console.log("Rejecting a Get Board State request: wrong password");
                 return res.status(401).json({
                     success: false,
                     message: "Invalid password, get outta here ya rascal"
@@ -112,12 +119,17 @@ export default async function handler(req, res) {
             // Reset Board) survived in the hash and were resurrected by the
             // next server-authoritative action — that's how ghost Queens from
             // a previous game reappeared on the first move of a new one.
-            if (skipSnapshot) {
-                await redis.multi()
-                    .del(REDIS_BOARD_CURRENT)
-                    .hset(REDIS_BOARD_CURRENT, stringifiedState)
-                    .exec();
-            } else {
+            //
+            // The whole read-modify-write runs under the state lock so it
+            // cannot interleave with a move being processed in /api/game.
+            await withStateLock(async () => {
+                if (skipSnapshot) {
+                    await redis.multi()
+                        .del(REDIS_BOARD_CURRENT)
+                        .hset(REDIS_BOARD_CURRENT, stringifiedState)
+                        .exec();
+                    return;
+                }
                 // Grab current board + turn state to create an undo snapshot
                 const [prevBoardState, prevTurnState] = await Promise.all([
                     redis.hgetall(REDIS_BOARD_CURRENT),
@@ -137,7 +149,7 @@ export default async function handler(req, res) {
                 pipeline.del(REDIS_BOARD_CURRENT);
                 pipeline.hset(REDIS_BOARD_CURRENT, stringifiedState);
                 await pipeline.exec();
-            }
+            });
 
             // Trigger Pusher event to give all clients the new board state
             const CHANNEL_NAME = 'chess-events';

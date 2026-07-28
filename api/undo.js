@@ -1,4 +1,4 @@
-import {redis, redisUnavailable, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK} from './_lib/redis.js';
+import {redis, redisUnavailable, withStateLock, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK} from './_lib/redis.js';
 import pusher from './_lib/pusher.js';
 import { checkPassword } from './auth.js';
 
@@ -27,8 +27,30 @@ export default async function handler(req, res) {
             });
         }
 
-        // Atomically pop the most recent snapshot from the undo stack
-        const snapshot = await redis.lpop(REDIS_UNDO_STACK);
+        // Pop the snapshot and restore it under the state lock, so an undo
+        // cannot be overwritten by a move that read the state before it landed
+        const snapshot = await withStateLock(async () => {
+            const popped = await redis.lpop(REDIS_UNDO_STACK);
+            if (!popped) return null;
+
+            // Re-stringify each hash field value for HSET (Redis stores them as strings)
+            const boardEntries = Object.fromEntries(
+                Object.entries(popped.boardState).map(([k, v]) => [k, JSON.stringify(v)])
+            );
+            const turnEntries = Object.fromEntries(
+                Object.entries(popped.turnState).map(([k, v]) => [k, JSON.stringify(v)])
+            );
+
+            // Restore both hashes atomically (DEL first to clear any stale fields)
+            await redis.multi()
+                .del(REDIS_BOARD_CURRENT)
+                .hset(REDIS_BOARD_CURRENT, boardEntries)
+                .del(REDIS_TURNS_CURRENT)
+                .hset(REDIS_TURNS_CURRENT, turnEntries)
+                .exec();
+
+            return popped;
+        });
         if (!snapshot) {
             console.log("Client asked to undo turn, but there's no history on the stack!")
             return res.status(200).json({
@@ -38,22 +60,6 @@ export default async function handler(req, res) {
         }
 
         console.log("Undo: restoring snapshot from timestamp", snapshot.timestamp);
-
-        // Re-stringify each hash field value for HSET (Redis stores them as strings)
-        const boardEntries = Object.fromEntries(
-            Object.entries(snapshot.boardState).map(([k, v]) => [k, JSON.stringify(v)])
-        );
-        const turnEntries = Object.fromEntries(
-            Object.entries(snapshot.turnState).map(([k, v]) => [k, JSON.stringify(v)])
-        );
-
-        // Restore both hashes atomically (DEL first to clear any stale fields)
-        await redis.multi()
-            .del(REDIS_BOARD_CURRENT)
-            .hset(REDIS_BOARD_CURRENT, boardEntries)
-            .del(REDIS_TURNS_CURRENT)
-            .hset(REDIS_TURNS_CURRENT, turnEntries)
-            .exec();
 
         // Fire Pusher events so all clients update
         const CHANNEL_NAME = 'chess-events';

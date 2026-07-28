@@ -156,4 +156,81 @@ export function redisUnavailable(res) {
 export const REDIS_BOARD_CURRENT = 'board:status';
 export const REDIS_TURNS_CURRENT = 'rules:status';
 export const REDIS_UNDO_STACK = 'undo:stack';
+export const REDIS_STATE_LOCK = 'state:lock';
 export const UNDO_STACK_MAX = 50;
+
+/*
+STATE LOCK
+
+Every handler that changes the game does read-modify-write across two Redis
+hashes, and on Vercel these functions regularly take over a second (cold
+starts). Without a lock two overlapping requests both read the OLD state and
+the slower one's write wins, silently undoing the faster one.
+
+That is not theoretical — it is the Hot Drop Queen bug. Pressing Reset Board
+and then immediately playing fired the reset (board write + turn write) and a
+MOVE at the same time; the MOVE had already read the pre-reset board, so its
+write put the previous game's rule-spawned Queens straight back, along with the
+old turn counter. The board looked clean until the first move re-materialised
+everything.
+
+So: serialize every mutation behind a short-lived lock, and take the read
+INSIDE the lock so nobody ever acts on state somebody else is replacing.
+*/
+
+const LOCK_TTL_MS = 10000;      // generous: longer than any handler should run
+const LOCK_RETRY_MS = 60;
+const LOCK_MAX_WAIT_MS = 6000;
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Only release a lock we still own — a handler that overran its TTL must not
+// delete the lock another request has since acquired.
+const RELEASE_SCRIPT = `
+if redis.call('get', KEYS[1]) == ARGV[1] then
+    return redis.call('del', KEYS[1])
+end
+return 0`;
+
+/*
+Runs `fn` with exclusive access to the game state.
+
+Returns whatever `fn` returns. If the lock cannot be acquired within
+LOCK_MAX_WAIT_MS the work runs anyway rather than failing the player's move:
+a rare racy write is a better outcome than a game that refuses to accept input
+because a lock leaked. `contended` tells the caller which happened.
+*/
+export async function withStateLock(fn, { client = redis, maxWaitMs = LOCK_MAX_WAIT_MS } = {}) {
+    const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const deadline = Date.now() + maxWaitMs;
+    let held = false;
+
+    while (Date.now() < deadline) {
+        try {
+            held = Boolean(await client.set(REDIS_STATE_LOCK, token, { nx: true, px: LOCK_TTL_MS }));
+        } catch (error) {
+            // A lock we cannot take is not a reason to drop the player's move
+            console.error('[redis] state lock unavailable, continuing unlocked:', error?.message);
+            break;
+        }
+        if (held) break;
+        await sleep(LOCK_RETRY_MS);
+    }
+
+    if (!held) {
+        console.warn('[redis] proceeding without the state lock (timed out waiting)');
+    }
+
+    try {
+        return await fn({ contended: !held });
+    } finally {
+        if (held) {
+            try {
+                await client.eval(RELEASE_SCRIPT, [REDIS_STATE_LOCK], [token]);
+            } catch (error) {
+                // The TTL will clear it; never fail a completed action on cleanup
+                console.error('[redis] failed to release the state lock:', error?.message);
+            }
+        }
+    }
+}

@@ -230,6 +230,10 @@ const DOUBLE_CLICK_THRESHOLD = 400;
 // piece context menu. The board itself never moves in response to input.
 
 const handleBoardInteraction = async (event, { rightClick = false } = {}) => {
+    // A click landing mid-reset would be judged against the board being
+    // replaced, so ignore input until the new board arrives
+    if (resetInFlight) return;
+
     const targetSquare = screenToSquare(event.clientX, event.clientY);
 
     // Double right-click detection (manual tools — Sandbox Mode only)
@@ -459,7 +463,24 @@ passButton.addEventListener('click', async () => {
 });
 
 // Reset button
+// Board input is blocked until the reset lands. Vercel's functions regularly
+// take over a second, and playing inside that window is what used to send a
+// move built from the pre-reset board.
+let resetInFlight = false;
+
 resetButton.addEventListener('click', async () => {
+    if (resetInFlight) return;
+    resetInFlight = true;
+    resetButton.disabled = true;
+    try {
+        await performReset();
+    } finally {
+        resetInFlight = false;
+        resetButton.disabled = false;
+    }
+});
+
+const performReset = async () => {
     if (inSandboxMode()) {
         // Sandbox is a free-form board with no server-side game to rebuild,
         // so the client's own reset is the source of truth here
@@ -473,7 +494,7 @@ resetButton.addEventListener('click', async () => {
     // re-upload pieces a stale tab was still carrying, which is exactly how
     // rule-spawned Queens survived a reset and returned on the next move.
     await postGameAction('RESET_GAME');
-});
+};
 
 // Settings panel: handle image dropdown changes (Sandbox tool)
 document.getElementById('settings-panel').addEventListener('change', async event => {
