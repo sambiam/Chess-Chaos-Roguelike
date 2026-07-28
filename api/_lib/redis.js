@@ -18,9 +18,35 @@ We now accept all three, deriving the REST endpoint from an Upstash connection
 URL when that is all we have.
 */
 
+const clean = (value) => (typeof value === 'string' ? value.trim() : '');
+
+/*
+Integrations often namespace their variables — Vercel's Marketplace lets you
+prefix a storage integration's vars per project, so the same credentials can
+arrive as KV_REST_API_URL, CHESS_KV_REST_API_URL or chess_KV_REST_API_URL.
+
+readEnv() takes the canonical name, prefers an exact match, and otherwise falls
+back to any variable whose name ends with `_<CANONICAL>` (compared without
+regard to case). Matching on the full canonical suffix keeps neighbours
+distinct: KV_REST_API_READ_ONLY_TOKEN never satisfies KV_REST_API_TOKEN, and
+KV_REST_API_URL never satisfies KV_URL. Ties are broken by sorting so the same
+environment always resolves the same way.
+*/
+const readEnv = (env, canonical) => {
+    const exact = clean(env[canonical]);
+    if (exact) return exact;
+
+    const suffix = `_${canonical.toUpperCase()}`;
+    const matches = Object.keys(env)
+        .filter(key => key.toUpperCase().endsWith(suffix) && clean(env[key]))
+        .sort();
+    return matches.length ? clean(env[matches[0]]) : '';
+};
+
 const firstNonEmpty = (...values) => {
     for (const value of values) {
-        if (typeof value === 'string' && value.trim() !== '') return value.trim();
+        const trimmed = clean(value);
+        if (trimmed) return trimmed;
     }
     return '';
 };
@@ -59,20 +85,20 @@ const deriveRestCredentials = (connectionUrl) => {
 
 export function resolveRedisCredentials(env = process.env) {
     const restUrl = firstNonEmpty(
-        env.KV_REST_API_URL,
-        env.UPSTASH_REDIS_REST_URL,
-        env.REDIS_REST_API_URL,
+        readEnv(env, 'KV_REST_API_URL'),
+        readEnv(env, 'UPSTASH_REDIS_REST_URL'),
+        readEnv(env, 'REDIS_REST_API_URL'),
     );
     const restToken = firstNonEmpty(
-        env.KV_REST_API_TOKEN,
-        env.UPSTASH_REDIS_REST_TOKEN,
-        env.REDIS_REST_API_TOKEN,
+        readEnv(env, 'KV_REST_API_TOKEN'),
+        readEnv(env, 'UPSTASH_REDIS_REST_TOKEN'),
+        readEnv(env, 'REDIS_REST_API_TOKEN'),
     );
     if (restUrl && restToken) {
         return { url: restUrl, token: restToken, error: '' };
     }
 
-    const connectionUrl = firstNonEmpty(env.REDIS_URL, env.KV_URL);
+    const connectionUrl = firstNonEmpty(readEnv(env, 'REDIS_URL'), readEnv(env, 'KV_URL'));
     if (connectionUrl) {
         const derived = deriveRestCredentials(connectionUrl);
         if (derived && derived.url && (derived.token || restToken)) {
@@ -94,7 +120,10 @@ export function resolveRedisCredentials(env = process.env) {
         error:
             'Redis is not configured. Set KV_REST_API_URL + KV_REST_API_TOKEN (or ' +
             'UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN, or an Upstash REDIS_URL) ' +
-            'in your environment variables, then redeploy.',
+            'in your environment variables, then redeploy. An integration prefix is fine — ' +
+            'CHESS_KV_REST_API_URL and the like are picked up automatically. Note that a ' +
+            'read-only token (KV_REST_API_READ_ONLY_TOKEN) is deliberately not used: the ' +
+            'game writes board state on every move.',
     };
 }
 
