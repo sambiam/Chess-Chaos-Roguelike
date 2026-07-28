@@ -1,5 +1,5 @@
 import Pusher from 'pusher-js';
-import { state, toNotation, turns } from './board-state.js';
+import { state, toNotation, turns, registerSpawnedPiece } from './board-state.js';
 import {
     updatePiecePosition,
     updatePieceImage,
@@ -11,6 +11,9 @@ import {
     refreshAllReviveButtons,
     syncHighlightFromServer,
     renderTurnUpdate,
+    ensurePieceDOM,
+    removePieceDOM,
+    showEvents,
 } from './board-view.js';
 import { apiGet, apiPost, getUserId, playCaptureSounds } from './utils.js';
 
@@ -19,13 +22,19 @@ import { apiGet, apiPost, getUserId, playCaptureSounds } from './utils.js';
 // =============================================================================
 
 let _clientSecret = '';
+let _onStateChanged = null;   // app.js hook: refresh seats/choices/pass/game-over UI
 let pusherClient = null;
 let pusherChannel = null;
 
-export function initNetwork({ clientSecret }) {
+export function initNetwork({ clientSecret, onStateChanged }) {
     _clientSecret = clientSecret;
+    _onStateChanged = onStateChanged;
     initializePusher();
 }
+
+const notifyStateChanged = () => {
+    if (_onStateChanged) _onStateChanged();
+};
 
 // =============================================================================
 // PUSHER INITIALIZATION
@@ -46,9 +55,9 @@ function initializePusher() {
     }
 
 	pusherClient = new Pusher(pusherKey, {cluster: pusherCluster,});
-	
+
 	pusherChannel = pusherClient.subscribe(CHANNEL_NAME);
-	
+
 	pusherChannel.bind(EVENT_TYPE_BOARD_UPDATE, (data) => {
         handleBoardUpdate(data);
 	});
@@ -56,7 +65,7 @@ function initializePusher() {
 	pusherChannel.bind(EVENT_TYPE_TURN_UPDATE, (data) => {
         handleTurnUpdate(data);
 	});
-	
+
 	pusherClient.connection.bind('connected', () => {
         const headerText = document.getElementById("pusher-status");
         headerText.textContent = "Connected to Pusher!"
@@ -85,6 +94,7 @@ export const pullServerBoardState = async () => {
         return;
     }
     syncBoardWithServer(result.boardState);
+    notifyStateChanged();
 }
 
 export const pullServerTurnState = async () => {
@@ -101,19 +111,30 @@ export const pullServerTurnState = async () => {
 // =============================================================================
 
 const handleBoardUpdate = (boardData) => {
-    if (boardData.userId === getUserId()) {
+    // Sandbox-mode edits are broadcast with the editor's userId so the editor
+    // can skip its own echo. Authoritative /api/game broadcasts carry NO
+    // userId — every client (including the actor) applies the server state.
+    if (boardData.userId && boardData.userId === getUserId()) {
         console.log("Received a Pusher piece move event, but we initiated it, so ignoring it");
         return;
     }
     syncBoardWithServer(boardData.newState);
+    showEvents(boardData.events);
+    notifyStateChanged();
 };
 
 const syncBoardWithServer = (newState) => {
     let playedCaptureSound = false;
+    const serverSlots = new Set();
     for (const [slot, newPiece] of Object.entries(newState)) {
         if (slot === 'boardEffects' || slot === 'highlightedSquare' || slot === 'selectedSlot') continue;
-        const currentPiece = state.pieces[Number(slot)];
-        if (!currentPiece) continue;
+        serverSlots.add(slot);
+        let currentPiece = state.pieces[slot];
+        if (!currentPiece) {
+            // A rule spawned a brand-new piece — create it locally
+            currentPiece = registerSpawnedPiece(slot, newPiece);
+            ensurePieceDOM(currentPiece);
+        }
         if (currentPiece.position.row !== newPiece.position.row || currentPiece.position.col !== newPiece.position.col) {
             currentPiece.position = { col: newPiece.position.col, row: newPiece.position.row };
             currentPiece.notation = toNotation(newPiece.position.col, newPiece.position.row);
@@ -122,8 +143,14 @@ const syncBoardWithServer = (newState) => {
         }
         if (currentPiece.image !== newPiece.image) {
             currentPiece.image = newPiece.image;
-            currentPiece.imageSelect.value = currentPiece.image;
+            if (currentPiece.imageSelect) currentPiece.imageSelect.value = currentPiece.image;
             updatePieceImage(currentPiece);
+        }
+        if (newPiece.color && currentPiece.color !== newPiece.color) {
+            currentPiece.color = newPiece.color; // Mind Control / conversions
+        }
+        if (newPiece.moved !== undefined) {
+            currentPiece.moved = !!newPiece.moved;
         }
         if (currentPiece.captured !== newPiece.captured) {
             currentPiece.captured = newPiece.captured;
@@ -139,6 +166,14 @@ const syncBoardWithServer = (newState) => {
             serverEmojis.some((e, i) => e !== currentEmojis[i])) {
             currentPiece.emojis = [...serverEmojis];
             updatePieceEmojis(currentPiece);
+        }
+    }
+
+    // Remove spawned pieces that no longer exist server-side (post-reset)
+    for (const slot of Object.keys(state.pieces)) {
+        if (Number(slot) > 32 && !serverSlots.has(slot)) {
+            removePieceDOM(slot);
+            delete state.pieces[slot];
         }
     }
 
@@ -194,16 +229,26 @@ const syncBoardWithServer = (newState) => {
 const handleTurnUpdate = (data) => {
     console.log("We got a turn update from the server with this info:", data.newTurn);
     const newTurnState = data.newTurn;
+    if (!newTurnState) return;
 
-    // Update turn state
-    turns.currentTurn = newTurnState.currentTurn;
-    turns.currentRules = newTurnState.currentRules;
-    turns.newRuleChoices = newTurnState.newRuleChoices;
+    // Update turn state (fresh databases may send an empty hash — default sanely)
+    turns.currentTurn = newTurnState.currentTurn ?? 1;
+    if (newTurnState.currentPlayer === undefined) newTurnState.currentPlayer = turns.currentPlayer;
+    if (newTurnState.nextTurnWithNewRules === undefined) newTurnState.nextTurnWithNewRules = turns.currentTurn + 3;
+    turns.currentRules = newTurnState.currentRules || [];
+    turns.newRuleChoices = newTurnState.newRuleChoices || [];
+    turns.seats = newTurnState.seats || { white: null, black: null };
+    turns.pendingChoices = newTurnState.pendingChoices || [];
+    turns.gameOver = newTurnState.gameOver || null;
+    turns.coinFlip = newTurnState.coinFlip || null;
+    turns.lastMove = newTurnState.lastMove || null;
 
     const playerChanged = turns.currentPlayer !== newTurnState.currentPlayer;
     if (playerChanged) {
         turns.currentPlayer = newTurnState.currentPlayer;
     }
+
+    showEvents(data.events);
 
     // Delegate all visual updates to the view layer
     renderTurnUpdate({
@@ -212,12 +257,15 @@ const handleTurnUpdate = (data) => {
         ruleJustExpired: data.ruleJustExpired,
         userId: data.userId,
         onRuleSelect: async (chosenIndex) => {
-            await apiPost('/api/turns', {
+            const result = await apiPost('/api/turns', {
                 clientSecret: _clientSecret,
                 userId: getUserId(),
                 action: 'SELECT_RULE',
                 payload: { chosenIndex },
             });
+            if (result && result.events) showEvents(result.events);
         },
     });
+
+    notifyStateChanged();
 };

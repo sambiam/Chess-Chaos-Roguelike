@@ -1122,3 +1122,271 @@ body {
 .square-highlight.fading {
     opacity: 0;
 }
+
+/* =============================================================================
+   ENFORCED PVP MODE — mode gating
+   ============================================================================= */
+
+/* The manual manipulation tools are Sandbox-only; hide them in enforced play */
+body.enforced-mode .randomizer-section,
+body.enforced-mode .settings-section {
+    display: none;
+}
+
+/* =============================================================================
+   SEATS (who plays which color)
+   ============================================================================= */
+
+.seats-section {
+    display: flex;
+    justify-content: center;
+    padding: 8px 0;
+}
+
+.seats-panel {
+    display: flex;
+    gap: 12px;
+}
+
+.seat-btn {
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: 2px solid #444;
+    font-family: 'Nunito', 'Roboto', sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+.seat-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+}
+
+.seat-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.seat-white {
+    background: #f4f0e6;
+    color: #222;
+}
+
+.seat-black {
+    background: #22252b;
+    color: #eee;
+}
+
+.seat-btn.mine {
+    border-color: #38b249;
+    box-shadow: 0 0 10px rgba(56, 178, 73, 0.55);
+}
+
+/* =============================================================================
+   LEGAL MOVE INDICATORS
+   ============================================================================= */
+
+.legal-moves-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 3;
+}
+
+.legal-move-dot {
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    box-sizing: border-box;
+    pointer-events: none;
+}
+
+.legal-move-dot::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 28px;
+    height: 28px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: rgba(30, 160, 60, 0.55);
+    box-shadow: 0 0 8px rgba(30, 160, 60, 0.5);
+}
+
+.legal-move-dot.capture::after {
+    width: 84px;
+    height: 84px;
+    background: transparent;
+    border: 6px solid rgba(200, 40, 40, 0.7);
+    box-shadow: 0 0 10px rgba(200, 40, 40, 0.5);
+}
+
+.legal-move-dot.push::after {
+    background: rgba(200, 140, 20, 0.6);
+    box-shadow: 0 0 8px rgba(200, 140, 20, 0.55);
+}
+
+/* =============================================================================
+   PENDING CHOICE UI
+   ============================================================================= */
+
+.choice-banner {
+    position: fixed;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 22px;
+    border-radius: 12px;
+    background: rgba(20, 22, 30, 0.95);
+    border: 2px solid #b58900;
+    color: #f5e9c8;
+    font-family: 'Nunito', 'Roboto', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+    max-width: 80vw;
+}
+
+.choice-banner.mine {
+    border-color: #38b249;
+}
+
+.choice-banner.hidden {
+    display: none;
+}
+
+.choice-timer {
+    padding: 2px 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.12);
+    font-variant-numeric: tabular-nums;
+}
+
+.choice-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 3;
+}
+
+.choice-candidate {
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    box-sizing: border-box;
+    border: 4px dashed #ffd452;
+    border-radius: 8px;
+    background: rgba(255, 212, 82, 0.12);
+    animation: choice-pulse 1.2s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes choice-pulse {
+    0%, 100% { opacity: 0.45; }
+    50%      { opacity: 1; }
+}
+
+/* =============================================================================
+   GAME OVER OVERLAY
+   ============================================================================= */
+
+.game-over-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.72);
+}
+
+.game-over-overlay.hidden {
+    display: none;
+}
+
+.game-over-card {
+    text-align: center;
+    padding: 44px 64px;
+    border-radius: 18px;
+    background: #191c24;
+    border: 3px solid #b58900;
+    color: #f5e9c8;
+    font-family: 'Nunito', 'Roboto', sans-serif;
+    box-shadow: 0 10px 50px rgba(0, 0, 0, 0.7);
+}
+
+.game-over-card h1 {
+    margin: 0 0 12px;
+    font-size: 2.6rem;
+    letter-spacing: 2px;
+}
+
+.game-over-card p {
+    margin: 6px 0;
+    font-size: 1.1rem;
+}
+
+.game-over-hint {
+    opacity: 0.65;
+    font-size: 0.9rem !important;
+}
+
+/* =============================================================================
+   EVENT TOASTS
+   ============================================================================= */
+
+.toast-container {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 70;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 380px;
+    pointer-events: none;
+}
+
+.event-toast {
+    padding: 10px 16px;
+    border-radius: 10px;
+    background: rgba(20, 22, 30, 0.93);
+    border: 1px solid #555;
+    color: #eee;
+    font-family: 'Nunito', 'Roboto', sans-serif;
+    font-size: 0.9rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+    opacity: 1;
+    transition: opacity 0.8s ease-out;
+}
+
+.event-toast.fading {
+    opacity: 0;
+}
+
+/* Pass button matches the tools-section button styling */
+#pass-turn {
+    background: linear-gradient(180deg, var(--card-bg) 0%, var(--bg-darker) 100%);
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 15px;
+    color: #d4b13e;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+#pass-turn:hover {
+    background: linear-gradient(180deg, #d4b13e 0%, #9a7f24 100%);
+    border-color: #d4b13e;
+    color: #fff;
+    transform: translateY(-1px);
+}

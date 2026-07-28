@@ -30,9 +30,13 @@
         </header>
 
     <div class="ignore-turns-widget">
-        <span class="ignore-turns-label">Ignore Turns</span>
+        <span class="ignore-turns-label">Sandbox Mode</span>
         <input type="checkbox" id="ignore-turns-checkbox" class="ignore-turns-checkbox">
     </div>
+
+    <section id="seats-section" class="seats-section">
+        <div id="seats-panel" class="seats-panel"></div>
+    </section>
 
         <section id="game-section" class="game-section">
             <div id="viewport" class="viewport">
@@ -67,6 +71,7 @@
 
         <section id="tools-section" class="tools-section">
             <button id="undo-turn" type="button">Undo Turn</button>
+            <button id="pass-turn" type="button" style="display: none;">Pass (No Legal Moves)</button>
             <h3 id="next-turn-with-new-rules">New Rules In ? Turns</h3>
             <h3 id="pusher-status">Disconnected</h3>
             <button id="reset-board" type="button">Reset Board</button>

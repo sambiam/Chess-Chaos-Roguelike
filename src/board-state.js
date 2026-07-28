@@ -1,53 +1,28 @@
 // =============================================================================
-// PIECE STATUS EMOJIS
+// CLIENT BOARD STATE
 // =============================================================================
+// Piece/status/effect definitions now live in shared/defs.js so the rules
+// engine (shared/engine.js) can use them on both client and server.
+// This module re-exports them for the view layer and manages the client-side
+// mirror of the authoritative server state.
 
-// Can add new emojis with { name: 'your_name', emoji: '🎯' } 
-// It'll automatically appear everywhere from there
+import {
+    MAX_PIECE_EMOJIS,
+    PIECE_STATUS_OPTIONS,
+    STATUS_EMOJI_MAP,
+    BOARD_EFFECT_OPTIONS,
+    BOARD_EFFECT_EMOJI_MAP,
+    toNotation,
+} from '../shared/defs.js';
 
-export const MAX_PIECE_EMOJIS = 4;
-
-export const PIECE_STATUS_OPTIONS = [
-    { name: 'frozen',        emoji: '❄️' },
-    { name: 'immortal',      emoji: '☠️' },
-    { name: 'pawn_moveset',  emoji: '♟️' },
-    { name: 'king_moveset',  emoji: '🫅' },
-    { name: 'queen_moveset', emoji: '👸' },
-    { name: 'soul_link',     emoji: '👨‍❤️‍👨' },
-    { name: 'on_ice',        emoji: '☃️' },
-    { name: 'misc_1',        emoji: '💪' },
-    { name: 'misc_2',        emoji: '🩸' },
-    { name: 'misc_3',        emoji: '💣' },
-    { name: 'misc_4',        emoji: '👑' },
-    { name: 'misc_5',        emoji: '🐎' },
-];
-
-// Lookup map: status name → emoji character (for rendering stored status names)
-export const STATUS_EMOJI_MAP = Object.fromEntries(
-    PIECE_STATUS_OPTIONS.map(opt => [opt.name, opt.emoji])
-);
-
-// =============================================================================
-// BOARD EFFECT EMOJIS
-// =============================================================================
-// Can add new emojis with { name: 'your_name', emoji: '🎯' } 
-
-export const BOARD_EFFECT_OPTIONS = [
-    { name: 'blocked',   emoji: '❌' },
-    { name: 'misc_1', emoji: '💣' },
-    { name: 'misc_2',    emoji: '💀' },
-    { name: 'misc_3',    emoji: '❄️' },
-    { name: 'misc_4',    emoji: '🔀' },
-    { name: 'misc_5',    emoji: '🌪️' },
-    { name: 'misc_6',    emoji: '💰' },
-    { name: 'misc_7',    emoji: '🕳️' },
-    { name: 'misc_8',    emoji: '⚡' },
-    { name: 'misc_9',    emoji: '☢️' },
-];
-
-export const BOARD_EFFECT_EMOJI_MAP = Object.fromEntries(
-    BOARD_EFFECT_OPTIONS.map(opt => [opt.name, opt.emoji])
-);
+export {
+    MAX_PIECE_EMOJIS,
+    PIECE_STATUS_OPTIONS,
+    STATUS_EMOJI_MAP,
+    BOARD_EFFECT_OPTIONS,
+    BOARD_EFFECT_EMOJI_MAP,
+    toNotation,
+};
 
 // =============================================================================
 // CONSTANTS
@@ -78,6 +53,7 @@ export const pieceImageOptions = [
 // - slot: unique identifier for each piece (1-32)
 // - col/row: board position (0-7), where row 0 is top (black's back rank)
 // - col 0 is leftmost (A file), col 7 is rightmost (H file)
+// Rules can SPAWN additional pieces (slot 33+); those arrive via server sync.
 
 export const piecesConfig = [
     // White back rank (row 7)
@@ -121,7 +97,7 @@ export const piecesConfig = [
 // =============================================================================
 // GAME STATE
 // =============================================================================
-// Single source of truth for all game data.
+// Client-side mirror of the authoritative server game state.
 // - pieces: Object mapping slot ID to piece data (position, captured status, etc.)
 // - selectedSlot: Currently selected piece for move operations
 // - boardEffects: key: "col,row" → value: array of effect name strings
@@ -137,22 +113,6 @@ export const state = {
 // This generates a simplified version of the state,
 //  where it only includes the info that the server cares about
 export const getSimpleBoardState = () => {
-    /*
-    Creates a new state of the board with following structure:
-    simpleState = {
-        1: {
-            captured: false,
-            image: "White Rook 1.png",
-            position: {
-                "col": 0,
-                "row": 7
-            }
-        },
-        2: {...},
-        3: {...},
-        etc
-    }
-    */
     const simpleState = {};
     for (const [slot, piece] of Object.entries(state.pieces)) {
         simpleState[slot] = {
@@ -160,6 +120,12 @@ export const getSimpleBoardState = () => {
             captured: piece.captured,
             position: { ...piece.position },
             emojis: [...piece.emojis],
+            // The rules engine needs these to validate and apply moves
+            color: piece.color,
+            label: piece.label,
+            moved: !!piece.moved,
+            initialPosition: { ...piece.initialPosition },
+            initialImage: piece.initialImage,
         };
     }
     // Include current selection so other clients can see it
@@ -180,13 +146,6 @@ export const getSimpleBoardState = () => {
 
 
 // =============================================================================
-// UTILITY FUNCTIONS
-// =============================================================================
-
-// Converts col/row to chess notation (e.g., col=0, row=7 -> "A1")
-export const toNotation = (col, row) => `${String.fromCharCode(65 + col)}${8 - row}`;
-
-// =============================================================================
 // PIECE STATE MANAGEMENT
 // =============================================================================
 // *** THIS IS WHERE PIECE POSITION DATA LIVES ***
@@ -196,6 +155,7 @@ export const toNotation = (col, row) => `${String.fromCharCode(65 + col)}${8 - r
 //   - notation: Chess notation string (e.g., "E4")
 //   - captured: Boolean indicating if piece has been taken
 //   - emojis: Array of status name strings (e.g., ["frozen", "immortal"])
+//   - moved: Whether the piece has moved this game (castling rights)
 
 // Creates the initial piece state from piecesConfig
 export const initializePieces = () => {
@@ -211,13 +171,36 @@ export const initializePieces = () => {
             notation: toNotation(config.col, config.row),
             captured: false,
             emojis: [],  // Array of status name strings (max MAX_PIECE_EMOJIS)
+            moved: false,
         };
     });
 };
 
+// Registers a rule-spawned piece (slot 33+) arriving from the server.
+// Returns the new piece object so the view can create its DOM elements.
+export const registerSpawnedPiece = (slot, data) => {
+    state.pieces[slot] = {
+        slot,
+        label: data.label || `Piece ${slot}`,
+        color: data.color || (data.image.startsWith('White') ? 'white' : 'black'),
+        image: data.image,
+        initialImage: data.initialImage || data.image,
+        position: { ...data.position },
+        initialPosition: data.initialPosition ? { ...data.initialPosition } : { ...data.position },
+        notation: toNotation(data.position.col, data.position.row),
+        captured: !!data.captured,
+        emojis: [...(data.emojis || [])],
+        moved: !!data.moved,
+    };
+    return state.pieces[slot];
+};
+
+// True for pieces that came from the standard starting 32
+export const isOriginalPiece = (slot) => Number(slot) <= 32;
+
 // Finds the piece at a given board position (returns null if empty)
 export const getPieceAt = (col, row) => {
-    return Object.values(state.pieces).find(p => 
+    return Object.values(state.pieces).find(p =>
         !p.captured && p.position.col === col && p.position.row === row
     ) || null;
 };
@@ -243,8 +226,10 @@ export const selectPiece = (slot) => {
 };
 
 // =============================================================================
-// PIECE MOVEMENT & CAPTURE
+// PIECE MOVEMENT & CAPTURE (Sandbox Mode)
 // =============================================================================
+// These free-form mutations are only used in Sandbox Mode. Competitive play
+// sends move intents to /api/game and the server engine decides everything.
 
 // Revives a captured piece back to its starting position/image, clearing emojis.
 // Returns null if the piece can't be revived (not captured, or starting spot is occupied).
@@ -269,10 +254,9 @@ export const capturePiece = (piece) => {
     return piece; // Return so app.js can update visuals
 };
 
-// *** CORE MOVEMENT FUNCTION ***
+// *** SANDBOX MOVEMENT FUNCTION ***
 // Moves a piece to a new position, handling captures.
 // Returns an object describing what happened
-// NOTE THIS DOES NOT JUST UPDATE THE POSITION OF A PIECE, IT HANDLES A BUNCH OF OTHER CONSEQUENCES
 export const movePiece = (slot, targetCol, targetRow) => {
     const piece = state.pieces[slot];
     if (!piece || piece.captured) return null;
@@ -290,6 +274,7 @@ export const movePiece = (slot, targetCol, targetRow) => {
     // *** UPDATE PIECE POSITION ***
     piece.position = { col: targetCol, row: targetRow };
     piece.notation = toNotation(targetCol, targetRow);
+    piece.moved = true;
 
     const moveResult = {
         piece,
@@ -301,32 +286,46 @@ export const movePiece = (slot, targetCol, targetRow) => {
     return moveResult;
 };
 
-// Resets all pieces to their starting positions
+// Resets all pieces to their starting positions.
+// Rule-spawned pieces (slot 33+) are removed entirely; their slots are
+// returned so the view can clean up their DOM elements.
 export const resetBoard = () => {
     deselectPiece();
     const resetPieces = [];
+    const removedSlots = [];
     Object.values(state.pieces).forEach(piece => {
+        if (!isOriginalPiece(piece.slot)) {
+            removedSlots.push(piece.slot);
+            return;
+        }
         piece.captured = false;
         piece.position = { ...piece.initialPosition };
         piece.notation = toNotation(piece.position.col, piece.position.row);
         piece.image = piece.initialImage; // Reset image to initial state
         piece.emojis = [];  // Clear all status emojis on reset
+        piece.moved = false;
         resetPieces.push(piece);
     });
+    removedSlots.forEach(slot => delete state.pieces[slot]);
     state.boardEffects = {};  // Clear all board square effects on reset
     state.highlightedSquare = null;  // Clear highlight on reset
-    return resetPieces; // Return all pieces so the view can update visuals
+    return { resetPieces, removedSlots };
 };
 
 // =============================================================================
 // TURN STATE
 // =============================================================================
+// Mirror of the server's turn hash. seats/pendingChoices/gameOver/coinFlip
+// are what make enforced PVP work.
 
 export const turns = {
     currentTurn: 1,
     currentPlayer: "white",
     currentRules: [],
     newRuleChoices: [],
+    seats: { white: null, black: null },
+    pendingChoices: [],
+    gameOver: null,
+    coinFlip: null,
+    lastMove: null,
 };
-
-

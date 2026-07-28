@@ -5,8 +5,24 @@ A chess game where you pick a new custom rule every 3 turns.
 Frontend is all written in vanilla JS and CSS, server is vanilla JS Vercel with a Redis DB to store the game state and Pusher to send live updates to clients. Written and designed by DougDoug, albeit with Ai doing a lot of the frontend logic (in particular the viewport, basic piece functionality, QoL features like the randomizer and settings, the animation effects, large chunks of the css). 
 
 To run this you'd have to set up your own Vercel server and associated Redis DB. But honestly if you know how to do that, it  makes way more sense to just go make your own version of this that doesn't use Vercel, if I was starting over I would absolutely not use a serverless backend, this thing became a massive headache by the end.
-If you just want to see the list of all rules, that's in /api/rules.js.
+If you just want to see the list of all rules, that's in /shared/rules.js.
 Feel free to use this for whatever you want! (although again you probably shouldn't)
+
+---
+
+## Enforced PVP mode
+
+The game is now a proper PVP game — every rule (standard chess movement AND all the chaos rules) is enforced automatically by a rules engine, with no manual adjudication needed:
+
+- **Seats:** each player claims White or Black at the top of the page. You can only move your own pieces, on your own turn.
+- **Server-authoritative:** clients send move *intents* to `/api/game`; the server engine validates legality (piece movesets, path blocking, castling, en passant, promotion, plus every active chaos rule) and applies all consequences (mines, portals, kamikaze chains, soul links, etc). Illegal moves are rejected — a modified client can't cheat.
+- **Legal move hints:** selecting one of your pieces highlights every square it may legally move to under the current rules.
+- **Rule choices:** rules that need a decision (Mind Control, Sophie's Choice, Mr Freeze, Bottomless Pit, ...) pop a synced prompt — the choosing player clicks a highlighted piece/square/column, the other player sees a "waiting" banner, and the choice auto-resolves sensibly after 60 seconds.
+- **Win condition:** destroy the enemy King (by capture or by chaos). Check/checkmate isn't used — with Kings teleporting through portals and dying to time bombs, king-capture is the only sane referee.
+- **Pass:** if you truly have no legal move, a Pass button appears (verified server-side).
+- **Sandbox Mode:** the checkbox in the top corner (Tab hotkey) switches back to the original free-for-all board — manual moves, the randomizer, piece settings, and emoji tools — for streamers who want to run the game by hand.
+
+Engine tests live in `tests/engine.test.mjs` — run with `npm test`.
 
 ---
 
@@ -60,12 +76,21 @@ This also became a disaster over time. The "board state" and the "turns" state a
 | File | What it does |
 |---|---|
 | `api/auth.js` | GET endpoint that checks the client password against the `CHESS_SECRET` Vercel environment variable |
-| `api/board-state.js` | GET returns the current board state from Redis. POST saves a new board state and creates a move history snapshop, fires a Pusher to all clients with the new board state. |
-| `api/turns.js` | GET returns turn/rules state; POST handles three actions: `RESET_TURNS`, `INCREMENT_TURN` (which will generate the new rule choices), and `SELECT_RULE`. |
-| `api/rules.js` | The list of ALL possible custom rules. |
+| `api/board-state.js` | GET returns the current board state from Redis. POST saves a new board state and creates a move history snapshop, fires a Pusher to all clients with the new board state. (Sandbox Mode only) |
+| `api/game.js` | **The enforced-PVP endpoint.** Handles `MOVE`, `PASS`, `CHOICE`, `CLAIM_SEAT`, `RELEASE_SEAT`. Validates everything against the shared rules engine and broadcasts the authoritative result. |
+| `api/turns.js` | GET returns turn/rules state; POST handles `RESET_TURNS`, `INCREMENT_TURN` (Sandbox Mode turn advance), and `SELECT_RULE` — which now actually EXECUTES the chosen rule on the board. |
 | `api/undo.js` | Endpoint that pulls the most recent board/turn state and rolls back all the clients via Pusher |
 | `api/_lib/redis.js` | Util helper for the Redis client. |
 | `api/_lib/pusher.js` | Util helper for the Pusher client. |
+
+### `shared/` — The Rules Engine (used by both client and server)
+
+| File | What it does |
+|---|---|
+| `shared/defs.js` | Piece types, status emoji + board effect definitions, board math helpers. |
+| `shared/rules.js` | The list of ALL possible custom rules (moved here from `api/rules.js`). |
+| `shared/engine.js` | Legal move generation (with every rule modifier), move application, the death pipeline (soul link / kamikaze / immunity), spawning, promotion, win detection. |
+| `shared/effects.js` | Executes each rule: instant effects, timed-rule setup, the synced player-choice system, end-of-turn effects (portals, blood sacrifice), and expiry effects (living bomb, time bomb, ...). |
 
 ### Root
 

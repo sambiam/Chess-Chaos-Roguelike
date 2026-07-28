@@ -1,3 +1,12 @@
+// =============================================================================
+// CHAOS RULE DEFINITIONS
+// =============================================================================
+// Shared by client and server. Every rule here is fully automated by the
+// engine (shared/effects.js executes them — see that file for the actual
+// behavior). Rule instances stored in turn state carry { id, title,
+// description, isInstant, turnsLeft, kingImmune, data } where `data` holds
+// per-instance info (chosen columns, marked squares, target pieces, etc.).
+
 const ALL_POSSIBLE_RULES = {
 
     // DOUG NOTES:
@@ -152,23 +161,23 @@ const ALL_POSSIBLE_RULES = {
     },
     sunday_school: {
         title: "Sunday School",
-        description: "Do random Sporcle quiz on religion, whoever's better gets a Bishop in chosen empty square",
+        description: "Both players take a lightning theology pop-quiz (auto-graded). Whoever scores better gets a Bishop in a chosen empty square",
         isInstant: true,
         kingImmune: true,
     },
     horse_race: {
         title: "Horse 1 Always Wins",
-        description: "Watch a horse race, whoever's horse places higher gets a Knight in a chosen empty square",
+        description: "A 2-horse race is simulated live. Whoever's horse wins gets a Knight in a chosen empty square",
         isInstant: true,
         kingImmune: true,
     },
 
 
-    
+
     // =============================================
     //               ALL TIMED
     // =============================================
-  
+
     blood_sacrifice: {
         title: "Blood Sacrifice",
         description: "Players pick one of their own pieces to die after every turn",
@@ -176,7 +185,7 @@ const ALL_POSSIBLE_RULES = {
         minTurns: 3,
         maxTurns: 5,
     },
-    
+
     living_bomb: {
         title: "Living Bomb",
         description: "Pick a friendly Piece. If it's alive when this rule expires, it explodes and kills all adjacent pieces",
@@ -361,7 +370,7 @@ const ALL_POSSIBLE_RULES = {
     },
     parry: {
         title: "Parry",
-        description: "Rock Paper Scissors for a chance to stop any attack",
+        description: "Rock Paper Scissors for a chance to stop any attack (auto-rolled)",
         isInstant: false,
         minTurns: 3,
         maxTurns: 7,
@@ -450,13 +459,6 @@ const ALL_POSSIBLE_RULES = {
         minTurns: 3,
         maxTurns: 9,
     },
-    terrible_idea: {
-        title: "Terrible Idea",
-        description: "Twitch Chat decides a new rule",
-        isInstant: false,
-        minTurns: 3,
-        maxTurns: 9,
-    },
     invul_potion: {
         title: "Invulnerability Potion",
         description: "Two random Pieces on your team cannot die",
@@ -466,37 +468,39 @@ const ALL_POSSIBLE_RULES = {
     },
 };
 
-function getRawRules(count=25) {
+export function getRuleDefinition(id) {
+    return ALL_POSSIBLE_RULES[id] || null;
+}
+
+function getRawRules(count = 25) {
     return Object.entries(ALL_POSSIBLE_RULES)
-      .map(([id, rule]) => ({ id, ...rule }))
-      .sort(() => Math.random() - 0.5)
-      .slice(0, count);
+        .map(([id, rule]) => ({ id, ...rule }))
+        .sort(() => Math.random() - 0.5)
+        .slice(0, count);
 }
 
 /*
-Returns an array of rule objects:
+Returns an array of rule instance objects:
 [
-    { 
-        title: "Pacifist",
-        description: "No piece can take any other pieces",
+    {
+        id: "pawns_with_viagra",
+        title: "Pawns with Viagra",
+        description: "Pawns can attack left or right",
         turnsLeft: 4,
-        isInstant: false
-    },
-    { 
-        title: "Switcheroo",
-        description: "All Bishops and Knights swap places",
-        isInstant: true,
-        turnsLeft: 0
+        isInstant: false,
+        kingImmune: false,
+        data: {},
     },
     ....
 ]
+`data` gets filled in by shared/effects.js when the rule is selected
+(chosen columns, marked squares, target pieces, etc.)
 */
 export function getNextRules(currentRules) {
-    
+
     console.log("Generating 3 new rules...");
     // First grab a randomized list of 25 rules
     // We need more than 3 in case any of them are already active
-    // Definitely a better way of doing this but fuck it I am exhausted
     const rawRules = getRawRules(25);
     let newRules = [];
     for (const nextRule of rawRules) {
@@ -507,21 +511,25 @@ export function getNextRules(currentRules) {
         // Now add the rule
         if (nextRule.isInstant) {
             newRules.push({
+                id: nextRule.id,
                 title: nextRule.title,
                 description: nextRule.description,
                 isInstant: true,
                 turnsLeft: 0, // unnecessary but just keeping for data consistency
                 kingImmune: !!nextRule.kingImmune,
+                data: {},
             });
         } else {
-            // Calculate the # of turns this rule will actually last for 
+            // Calculate the # of turns this rule will actually last for
             const randomTurns = Math.floor(Math.random() * (nextRule.maxTurns - nextRule.minTurns + 1)) + nextRule.minTurns;
             newRules.push({
+                id: nextRule.id,
                 title: nextRule.title,
                 description: nextRule.description,
                 isInstant: false,
                 turnsLeft: randomTurns,
                 kingImmune: !!nextRule.kingImmune,
+                data: {},
             });
         }
         // Stop once we've reached the 3-rule cap
@@ -532,4 +540,3 @@ export function getNextRules(currentRules) {
     // Now return our list of new rules!
     return newRules;
 }
-

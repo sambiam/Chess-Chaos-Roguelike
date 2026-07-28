@@ -26,7 +26,14 @@ import {
     handleResetBoard,
     showContextMenu,
     dismissPieceContextMenu,
-    updateTitleVisuals,
+    renderLegalMoves,
+    clearLegalMoves,
+    renderChoiceUI,
+    clearChoiceUI,
+    getChoiceCandidateAt,
+    renderSeats,
+    renderGameOver,
+    showEvents,
 } from './board-view.js';
 import {
     initNetwork,
@@ -35,6 +42,7 @@ import {
 } from './network.js';
 import { apiGet, apiPost, getUserId, playCaptureSounds } from './utils.js';
 import { startPageBackground } from './animated-bg.js';
+import { getAllLegalMoves } from '../shared/engine.js';
 
 // =============================================================================
 // CONSTANTS
@@ -57,13 +65,37 @@ const viewport = document.getElementById('viewport');
 const stage = document.getElementById('stage');
 const undoTurnButton = document.getElementById('undo-turn');
 const resetButton = document.getElementById('reset-board');
+const passButton = document.getElementById('pass-turn');
 const ignoreTurnsCheckbox = document.getElementById('ignore-turns-checkbox');
 
+// =============================================================================
+// MODE HELPERS
+// =============================================================================
+// Sandbox Mode = the old free-for-all board (manual moves, no enforcement).
+// Enforced mode (default) = server-validated PVP with automated rules.
+
+const inSandboxMode = () => ignoreTurnsCheckbox.checked;
+
+const mySeat = () => {
+    const uid = getUserId();
+    if (turns.seats?.white === uid) return 'white';
+    if (turns.seats?.black === uid) return 'black';
+    return null;
+};
+
+const applyModeVisuals = () => {
+    const sandbox = inSandboxMode();
+    viewport.classList.toggle('ignoring-turns', sandbox);
+    document.body.classList.toggle('sandbox-mode', sandbox);
+    document.body.classList.toggle('enforced-mode', !sandbox);
+};
+
 ignoreTurnsCheckbox.addEventListener('change', () => {
-    viewport.classList.toggle('ignoring-turns', ignoreTurnsCheckbox.checked);
+    applyModeVisuals();
+    refreshPlayUI();
 });
 
-// Hotkey: Tab key toggles Ignore Turns checkbox
+// Hotkey: Tab key toggles Sandbox Mode checkbox
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Tab') {
         e.preventDefault();
@@ -81,7 +113,7 @@ const zoomPan = createZoomPan(viewport, stage, {
     contentSize: BOARD_SIZE,
 });
 
-const screenToSquare = (clientX, clientY) => 
+const screenToSquare = (clientX, clientY) =>
     zoomPan.toGridSquare(clientX, clientY, SQUARE_SIZE, 8, 8);
 
 // =============================================================================
@@ -97,11 +129,50 @@ const postBoardState = (extra = {}) => apiPost('/api/board-state', {
 
 const sendSelectionUpdate = () => postBoardState({ skipSnapshot: true });
 
+const postGameAction = async (action, payload = {}) => {
+    const result = await apiPost('/api/game', {
+        clientSecret,
+        userId: getUserId(),
+        action,
+        payload,
+    });
+    if (!result.success && result.message) {
+        showEvents([result.message]);
+    }
+    return result;
+};
+
+// Builds a read-only engine game object over the client's mirrored state
+const localGame = () => ({
+    pieces: state.pieces,
+    boardEffects: state.boardEffects,
+    turn: turns,
+    events: [],
+});
+
+// Legal moves for my whole side (enforced mode), cached per refresh
+let myLegalMoves = {};
+
+const refreshMyLegalMoves = () => {
+    const seat = mySeat();
+    if (inSandboxMode() || !seat || seat !== turns.currentPlayer || turns.gameOver) {
+        myLegalMoves = {};
+        return;
+    }
+    try {
+        myLegalMoves = getAllLegalMoves(localGame(), seat);
+    } catch (err) {
+        console.error('Failed to compute legal moves locally:', err);
+        myLegalMoves = {};
+    }
+};
+
 // =============================================================================
 // MOVE HANDLING
 // =============================================================================
 
-const handleClientMove = async (slot, targetCol, targetRow) => {
+// Sandbox: mutate freely and push the whole board state (the original flow)
+const handleSandboxMove = async (slot, targetCol, targetRow) => {
     const result = movePiece(slot, targetCol, targetRow);
     if (!result) return;
 
@@ -117,28 +188,26 @@ const handleClientMove = async (slot, targetCol, targetRow) => {
     refreshAllReviveButtons();
     handleDeselectPiece();
 
-    // We want the client visuals to update immediately rather than waiting on server
-    const ignoreTurns = ignoreTurnsCheckbox.checked;
-    if (!ignoreTurns) {
-        turns.currentPlayer = (turns.currentPlayer === "white") ? "black" : "white";
-        updateTitleVisuals(turns.currentPlayer);
-    }
-
     let response = await postBoardState();
     if (!response.success) {
         console.log("Failed to update Board State on server. Message: ", response.message);
         return;
     }
-    console.log("Posted new board state to the server", response)
+    console.log("Posted new board state to the server", response);
+    console.log("Sandbox Mode: skipping turn processing");
+};
 
-    if (ignoreTurns) {
-        console.log("Skipping turn processing because the Ignore Turns checkbox is checked");
+// Enforced: send the move intent — the server engine validates and applies
+const handleEnforcedMove = async (slot, targetCol, targetRow) => {
+    const legal = (myLegalMoves[slot] || []).some(m => m.col === targetCol && m.row === targetRow);
+    if (!legal) {
+        showEvents(['Illegal move']);
         return;
     }
-    response = await apiPost('/api/turns', {clientSecret, userId: getUserId(), action: 'INCREMENT_TURN',});
-    if (!response.success) {
-        console.log("Failed to update Turn State on server. Message: ", response.message);
-    }
+    clearLegalMoves();
+    handleDeselectPiece();
+    await postGameAction('MOVE', { slot, target: { col: targetCol, row: targetRow } });
+    // The authoritative result arrives via Pusher and updates everything
 };
 
 // =============================================================================
@@ -152,13 +221,14 @@ const DOUBLE_CLICK_THRESHOLD = 400;
 // =============================================================================
 // VIEWPORT INPUT (Right-Click)
 // =============================================================================
-// Right-click: select a piece, move the selected piece, or open piece context menu
+// Right-click: select a piece, move the selected piece, or (sandbox only)
+// open the manual piece context menu with a double right-click.
 
 viewport.addEventListener('contextmenu', async event => {
     event.preventDefault();
     const targetSquare = screenToSquare(event.clientX, event.clientY);
 
-    // Double right-click detection
+    // Double right-click detection (manual tools — Sandbox Mode only)
     const now = Date.now();
     const isDoubleRightClick =
         (now - lastRightClickTime < DOUBLE_CLICK_THRESHOLD) &&
@@ -168,7 +238,7 @@ viewport.addEventListener('contextmenu', async event => {
     lastRightClickTime = now;
     lastRightClickSquare = targetSquare;
 
-    if (isDoubleRightClick && targetSquare) {
+    if (isDoubleRightClick && targetSquare && inSandboxMode()) {
         const piece = getPieceAt(targetSquare.col, targetSquare.row);
         const prevSlot = state.selectedSlot;
         if (piece) handleSelectPiece(piece.slot);
@@ -182,6 +252,7 @@ viewport.addEventListener('contextmenu', async event => {
     if (!targetSquare) {
         if (state.selectedSlot) {
             handleDeselectPiece();
+            clearLegalMoves();
             await sendSelectionUpdate();
         }
         return;
@@ -189,32 +260,183 @@ viewport.addEventListener('contextmenu', async event => {
 
     const targetPiece = getPieceAt(targetSquare.col, targetSquare.row);
 
-    // No piece selected - try to select one
-    if (!state.selectedSlot) {
-        if (targetPiece) {
-            handleSelectPiece(targetPiece.slot);
-            await sendSelectionUpdate();
+    // ------------------------- SANDBOX MODE -------------------------
+    if (inSandboxMode()) {
+        if (!state.selectedSlot) {
+            if (targetPiece) {
+                handleSelectPiece(targetPiece.slot);
+                await sendSelectionUpdate();
+            }
+            return;
         }
+        const selectedPiece = state.pieces[state.selectedSlot];
+        if (!selectedPiece) {
+            handleDeselectPiece();
+            await sendSelectionUpdate();
+            return;
+        }
+        if (selectedPiece.position.col === targetSquare.col &&
+            selectedPiece.position.row === targetSquare.row) {
+            handleDeselectPiece();
+            await sendSelectionUpdate();
+            return;
+        }
+        await handleSandboxMove(state.selectedSlot, targetSquare.col, targetSquare.row);
         return;
     }
+
+    // ------------------------- ENFORCED MODE -------------------------
+    if (turns.gameOver) return;
+
+    // A pending choice takes over the board — clicks resolve it (left OR right)
+    if (await tryResolveChoiceClick(targetSquare)) return;
+
+    const seat = mySeat();
+    if (!seat) {
+        showEvents(['Claim a seat (White or Black) to play']);
+        return;
+    }
+    if (seat !== turns.currentPlayer) {
+        showEvents([`It is ${turns.currentPlayer}'s turn`]);
+        return;
+    }
+    if ((turns.pendingChoices || []).length > 0) {
+        showEvents(['Waiting on a rule choice']);
+        return;
+    }
+
+    // Selecting one of my movable pieces
+    if (targetPiece && targetPiece.color === seat && state.selectedSlot !== targetPiece.slot) {
+        handleSelectPiece(targetPiece.slot);
+        refreshMyLegalMoves();
+        renderLegalMoves(myLegalMoves[targetPiece.slot] || []);
+        await sendSelectionUpdate();
+        return;
+    }
+
+    if (!state.selectedSlot) return;
 
     const selectedPiece = state.pieces[state.selectedSlot];
     if (!selectedPiece) {
         handleDeselectPiece();
-        await sendSelectionUpdate();
+        clearLegalMoves();
         return;
     }
 
-    // Clicking same square deselects
-    if (selectedPiece.position.col === targetSquare.col && 
+    // Clicking the selected piece's own square deselects
+    if (selectedPiece.position.col === targetSquare.col &&
         selectedPiece.position.row === targetSquare.row) {
         handleDeselectPiece();
+        clearLegalMoves();
         await sendSelectionUpdate();
         return;
     }
 
-    await handleClientMove(state.selectedSlot, targetSquare.col, targetSquare.row);
+    await handleEnforcedMove(state.selectedSlot, targetSquare.col, targetSquare.row);
 });
+
+// =============================================================================
+// CHOICE HANDLING (left-click friendly)
+// =============================================================================
+
+const tryResolveChoiceClick = async (targetSquare) => {
+    const choice = myPendingChoice();
+    if (!choice || !targetSquare) return false;
+    const selection = getChoiceCandidateAt(targetSquare.col, targetSquare.row);
+    if (selection === undefined) return false;
+    clearChoiceUI();
+    await postGameAction('CHOICE', { choiceId: choice.id, selection });
+    return true;
+};
+
+const myPendingChoice = () => {
+    const seat = mySeat();
+    return (turns.pendingChoices || []).find(c => c.color === seat) || null;
+};
+
+// Left-click resolves choices too (with a small drag guard so panning is safe)
+let leftClickStart = null;
+viewport.addEventListener('mousedown', event => {
+    if (event.button === 0) leftClickStart = { x: event.clientX, y: event.clientY };
+});
+viewport.addEventListener('mouseup', async event => {
+    if (event.button !== 0 || !leftClickStart) return;
+    const moved = Math.abs(event.clientX - leftClickStart.x) + Math.abs(event.clientY - leftClickStart.y);
+    leftClickStart = null;
+    if (moved > 6 || inSandboxMode()) return;
+    const targetSquare = screenToSquare(event.clientX, event.clientY);
+    if (targetSquare) await tryResolveChoiceClick(targetSquare);
+});
+
+// =============================================================================
+// PLAY UI REFRESH (seats, choices, pass button, game over)
+// =============================================================================
+// Called whenever fresh authoritative state lands (Pusher or initial pull).
+
+let choiceTimerInterval = null;
+let autoChoiceFiredFor = null;
+
+function refreshPlayUI() {
+    applyModeVisuals();
+
+    // Seats
+    renderSeats({
+        seats: turns.seats || { white: null, black: null },
+        mySeat: mySeat(),
+        onClaim: async (seat) => { await postGameAction('CLAIM_SEAT', { seat }); },
+        onRelease: async () => { await postGameAction('RELEASE_SEAT'); },
+    });
+
+    // Game over overlay
+    renderGameOver(inSandboxMode() ? null : turns.gameOver);
+
+    // Legal move dots for the current selection
+    refreshMyLegalMoves();
+    if (!inSandboxMode() && state.selectedSlot && myLegalMoves[state.selectedSlot]) {
+        renderLegalMoves(myLegalMoves[state.selectedSlot]);
+    } else {
+        clearLegalMoves();
+    }
+
+    // Pass button: only when it's my turn and I truly have no legal moves
+    const seat = mySeat();
+    const canPass = !inSandboxMode() && seat && seat === turns.currentPlayer &&
+        !turns.gameOver && (turns.pendingChoices || []).length === 0 &&
+        Object.keys(myLegalMoves).length === 0;
+    passButton.style.display = canPass ? '' : 'none';
+
+    // Pending choice banner + candidates + countdown
+    refreshChoiceUI();
+}
+
+function refreshChoiceUI() {
+    if (choiceTimerInterval) {
+        clearInterval(choiceTimerInterval);
+        choiceTimerInterval = null;
+    }
+    const pending = turns.pendingChoices || [];
+    if (inSandboxMode() || pending.length === 0) {
+        clearChoiceUI();
+        return;
+    }
+
+    const mine = myPendingChoice();
+    const display = mine || pending[0];
+
+    const tick = async () => {
+        const secondsLeft = Math.max(0, Math.ceil((display.deadline - Date.now()) / 1000));
+        renderChoiceUI({ choice: display, isMine: !!mine, secondsLeft });
+        // Timer expiry: the owner fires the auto-resolve; anyone else fires
+        // a few seconds later as a fallback (covers disconnected opponents)
+        const grace = mine ? 0 : 5000;
+        if (Date.now() > display.deadline + grace && autoChoiceFiredFor !== display.id) {
+            autoChoiceFiredFor = display.id;
+            await postGameAction('CHOICE', { choiceId: display.id, auto: true });
+        }
+    };
+    tick();
+    choiceTimerInterval = setInterval(tick, 1000);
+}
 
 // =============================================================================
 // DOM EVENT HANDLERS
@@ -232,6 +454,11 @@ undoTurnButton.addEventListener('click', async () => {
     console.log("Successfully undid a turn!")
 });
 
+// Pass button (enforced mode, no legal moves)
+passButton.addEventListener('click', async () => {
+    await postGameAction('PASS');
+});
+
 // Reset button
 resetButton.addEventListener('click', async () => {
     handleResetBoard();
@@ -239,7 +466,7 @@ resetButton.addEventListener('click', async () => {
     await apiPost('/api/turns', {clientSecret, userId: getUserId(), action: 'RESET_TURNS',});
 });
 
-// Settings panel: handle image dropdown changes
+// Settings panel: handle image dropdown changes (Sandbox tool)
 document.getElementById('settings-panel').addEventListener('change', async event => {
     if (!event.target.classList.contains('image-select')) return;
     const piece = state.pieces[event.target.dataset.slot];
@@ -288,6 +515,16 @@ async function initializeApp() {
         postBoardState,
         zoomPan,
         boardSize: BOARD_SIZE,
+        // Gate rule-card clicks: only the player to move may pick (when seats exist)
+        onRuleCardClick: () => {
+            const seatsClaimed = turns.seats?.white || turns.seats?.black;
+            if (!seatsClaimed) return true;
+            if (mySeat() !== turns.currentPlayer) {
+                showEvents([`Only ${turns.currentPlayer} may pick the new rule`]);
+                return false;
+            }
+            return true;
+        },
     });
 
     // Render all visual elements
@@ -299,8 +536,10 @@ async function initializeApp() {
 
     startPageBackground(document.body);
 
+    applyModeVisuals();
+
     // Initialize server connection
-    initNetwork({ clientSecret });
+    initNetwork({ clientSecret, onStateChanged: refreshPlayUI });
 
     // Pull current state from the server
     await pullServerBoardState();
