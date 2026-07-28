@@ -497,17 +497,23 @@ passButton.addEventListener('click', async () => {
 // move built from the pre-reset board.
 let resetInFlight = false;
 
-resetButton.addEventListener('click', async () => {
+// Shared by the toolbar button and the one on the game-over card, so both
+// respect the same in-flight guard
+const runReset = async (extraButton = null) => {
     if (resetInFlight) return;
     resetInFlight = true;
     resetButton.disabled = true;
+    if (extraButton) extraButton.disabled = true;
     try {
         await performReset();
     } finally {
         resetInFlight = false;
         resetButton.disabled = false;
+        if (extraButton) extraButton.disabled = false;
     }
-});
+};
+
+resetButton.addEventListener('click', () => runReset());
 
 const performReset = async () => {
     if (inSandboxMode()) {
@@ -573,6 +579,7 @@ async function initializeApp() {
     initView({
         postBoardState,
         postHighlight,
+        onResetBoard: runReset,
         zoomPan,
         boardSize: BOARD_SIZE,
         // Gate rule-card clicks: only the player to move may pick (when seats exist)

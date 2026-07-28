@@ -1340,6 +1340,41 @@ body.enforced-mode .settings-section {
     font-size: 0.9rem !important;
 }
 
+/* The overlay sits over the toolbar, so the card carries its own Reset Board */
+.game-over-reset {
+    margin-top: 20px;
+    padding: 12px 28px;
+    font-family: inherit;
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: #f5e9c8;
+    background: linear-gradient(180deg, #2a2f3a 0%, #191c24 100%);
+    border: 2px solid #b58900;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+.game-over-reset:hover {
+    background: linear-gradient(180deg, #b58900 0%, #8a6800 100%);
+    color: #191c24;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5), 0 0 18px rgba(181, 137, 0, 0.35);
+}
+
+.game-over-reset:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.game-over-reset:disabled {
+    opacity: 0.5;
+    cursor: default;
+    transform: none;
+}
+
 /* =============================================================================
    EVENT TOASTS
    ============================================================================= */
