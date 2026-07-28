@@ -83,15 +83,20 @@ export default async function handler(req, res) {
                     result = { success: false, message: 'Seat must be white or black' };
                     break;
                 }
-                if (seats[seat] && seats[seat] !== userId) {
-                    result = { success: false, message: `The ${seat} seat is already taken` };
-                    break;
-                }
+                // This is a private game between friends: any seat can always be
+                // claimed, even one that already has an occupant. A stale userId
+                // (cleared localStorage, a different browser) used to lock a
+                // colour out permanently with "already taken".
+                const previousOccupant = seats[seat];
                 // One seat per user — leaving your old seat if you switch
                 if (seats.white === userId) seats.white = null;
                 if (seats.black === userId) seats.black = null;
                 seats[seat] = userId;
-                game.events.push(`A player claimed the ${seat} seat`);
+                game.events.push(
+                    previousOccupant && previousOccupant !== userId
+                        ? `A player took over the ${seat} seat`
+                        : `A player claimed the ${seat} seat`
+                );
                 result = { success: true, message: `You are now playing ${seat}`, seat };
                 mutated = true;
                 break;

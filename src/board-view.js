@@ -1013,8 +1013,11 @@ export const renderSeats = ({ seats, mySeat, onClaim, onRelease }) => {
             button.classList.add('mine');
             button.addEventListener('click', onRelease);
         } else if (occupant) {
-            button.textContent = `${seat.toUpperCase()} — taken`;
-            button.disabled = true;
+            // Private game: an occupied seat is still claimable, so anyone can
+            // take over a colour left behind by a stale browser session
+            button.textContent = `Play as ${seat.toUpperCase()} — take over`;
+            button.classList.add('taken');
+            button.addEventListener('click', () => onClaim(seat));
         } else {
             button.textContent = `Play as ${seat.toUpperCase()}`;
             button.addEventListener('click', () => onClaim(seat));
