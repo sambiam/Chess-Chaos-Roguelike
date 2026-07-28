@@ -86,6 +86,39 @@ export const STARTING_PIECES = [
 // True for pieces from the standard starting 32 (rule-spawned pieces are 33+)
 export const isOriginalSlot = (slot) => Number(slot) <= 32;
 
+// True for the keys of a board hash that hold a piece (the rest are
+// selectedSlot / boardEffects / highlightedSquare)
+export const isPieceSlot = (key) => /^\d+$/.test(key);
+
+/*
+Clients hold a MIRROR of the board; only the server's rules engine ever CREATES
+a piece. So a client's board POST may update pieces the server already knows
+about, but it must never introduce a slot the authoritative board no longer has.
+
+That is exactly how Hot Drop's two Queens kept coming back on the first move of
+a fresh game: they live in rule-spawned slots 33/34, Reset Board deletes them
+server-side, but any tab that missed the reset broadcast (a background tab, a
+dropped Pusher connection, a second tab of the same browser) still carried them
+in memory — and the next thing that tab posted wrote them straight back in.
+
+Slots 1-32 are always allowed: they are the canonical starting pieces, so
+accepting them is what lets a brand-new (empty) database be seeded.
+*/
+export const filterResurrectedSlots = (incomingBoard, currentBoard = {}) => {
+    const board = {};
+    const dropped = [];
+    const current = currentBoard || {};
+    for (const [key, value] of Object.entries(incomingBoard || {})) {
+        if (!isPieceSlot(key) || isOriginalSlot(key) ||
+            Object.prototype.hasOwnProperty.call(current, key)) {
+            board[key] = value;
+        } else {
+            dropped.push(key);
+        }
+    }
+    return { board, dropped };
+};
+
 // Builds a pristine { slot: piece } map in the shape the engine expects
 export const createStartingPieces = () => {
     const pieces = {};

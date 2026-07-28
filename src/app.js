@@ -39,8 +39,10 @@ import {
     initNetwork,
     pullServerBoardState,
     pullServerTurnState,
+    getBoardVersion,
+    setBoardVersion,
 } from './network.js';
-import { apiGet, apiPost, getUserId, playCaptureSounds } from './utils.js';
+import { apiGet, apiPost, getUserId, getTabId, playCaptureSounds } from './utils.js';
 import { startPageBackground } from './animated-bg.js';
 import { getAllLegalMoves } from '../shared/engine.js';
 
@@ -119,12 +121,39 @@ const screenToSquare = (clientX, clientY) =>
 // HELPERS
 // =============================================================================
 
-const postBoardState = (extra = {}) => apiPost('/api/board-state', {
-    clientSecret,
-    userId: getUserId(),
-    newState: getSimpleBoardState(),
-    ...extra,
-});
+const postBoardState = async (extra = {}) => {
+    const result = await apiPost('/api/board-state', {
+        clientSecret,
+        userId: getUserId(),
+        // Per-tab, so the echo we skip is genuinely our own (see getTabId)
+        tabId: getTabId(),
+        // The board this write was built from — the server refuses it if the
+        // real board has moved on since
+        boardVersion: getBoardVersion(),
+        newState: getSimpleBoardState(),
+        ...extra,
+    });
+    setBoardVersion(result?.boardVersion);
+    // The server rejected our board: either it was out of date or it was built
+    // from pieces the server no longer has. Either way we are the stale one, so
+    // take its board instead of ours.
+    if (result && result.resync) await pullServerBoardState();
+    return result;
+};
+
+// The randomizer highlight is a cosmetic overlay, not a board edit: send just
+// that field. Posting the whole mirror for it could write a stale board over a
+// move that had landed a moment earlier.
+const postHighlight = async (highlight) => {
+    const result = await apiPost('/api/board-state', {
+        clientSecret,
+        userId: getUserId(),
+        tabId: getTabId(),
+        highlight: highlight ?? null,
+    });
+    setBoardVersion(result?.boardVersion);
+    return result;
+};
 
 const postGameAction = async (action, payload = {}) => {
     const result = await apiPost('/api/game', {
@@ -468,17 +497,23 @@ passButton.addEventListener('click', async () => {
 // move built from the pre-reset board.
 let resetInFlight = false;
 
-resetButton.addEventListener('click', async () => {
+// Shared by the toolbar button and the one on the game-over card, so both
+// respect the same in-flight guard
+const runReset = async (extraButton = null) => {
     if (resetInFlight) return;
     resetInFlight = true;
     resetButton.disabled = true;
+    if (extraButton) extraButton.disabled = true;
     try {
         await performReset();
     } finally {
         resetInFlight = false;
         resetButton.disabled = false;
+        if (extraButton) extraButton.disabled = false;
     }
-});
+};
+
+resetButton.addEventListener('click', () => runReset());
 
 const performReset = async () => {
     if (inSandboxMode()) {
@@ -543,6 +578,8 @@ async function initializeApp() {
     // Wire up the view layer with shared references
     initView({
         postBoardState,
+        postHighlight,
+        onResetBoard: runReset,
         zoomPan,
         boardSize: BOARD_SIZE,
         // Gate rule-card clicks: only the player to move may pick (when seats exist)

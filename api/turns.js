@@ -28,7 +28,7 @@ const STARTING_TURN = 1;
 const TURNS_UNTIL_NEW_RULES = 3;
 const STARTING_PLAYER = 'white';
 
-import { redis, redisUnavailable, withStateLock, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX } from './_lib/redis.js';
+import { redis, redisUnavailable, withStateLock, bumpBoardVersion, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX } from './_lib/redis.js';
 import pusher from './_lib/pusher.js';
 import { checkPassword } from './auth.js';
 import { buildGame, serializeBoard, serializeTurn } from '../shared/engine.js';
@@ -257,9 +257,13 @@ async function saveAndBroadcast(game, prevBoardState, prevTurnState, { userId, r
     pipeline.hset(REDIS_TURNS_CURRENT, stringifiedTurn);
     await pipeline.exec();
 
+    // Rule effects rewrite the board, so clients holding the older one must
+    // not be allowed to write it back
+    const boardVersion = await bumpBoardVersion();
+
     await Promise.all([
         pusher.trigger(CHANNEL_NAME, EVENT_TYPE_BOARD_UPDATE, {
-            newState: newBoard, events: game.events,
+            newState: newBoard, events: game.events, boardVersion,
         }),
         pusher.trigger(CHANNEL_NAME, EVENT_TYPE_TURN_UPDATE, {
             newTurn, userId, ruleJustExpired, events: game.events,
