@@ -1,5 +1,5 @@
 /*
-Manages the current turn info, current rules, and rule choices
+Manages the current turn info, current rules, and rule choices.
 
 KEY: "rules:status"
 HASH: {
@@ -8,24 +8,41 @@ HASH: {
     currentPlayer: "white",
     currentRules: [],
     newRuleChoices: [],
+    seats: { white: userId|null, black: userId|null },
+    pendingChoices: [],
+    gameOver: null,
+    coinFlip: null,
+    lastMove: null,
     justSelectedRule: true,
 }
+
+Since rules are now actually ENFORCED, selecting a rule executes its effect
+on the board server-side (instants shuffle/kill/spawn pieces immediately;
+timed rules set up their markers and player choices). Turn advancement for
+competitive play happens in api/game.js; the INCREMENT_TURN action here is
+kept for Sandbox Mode and runs the same shared finishTurn() logic so rule
+timers, portals, and expiry effects still fire in sandbox games.
 */
 
 const STARTING_TURN = 1;
 const TURNS_UNTIL_NEW_RULES = 3;
 const STARTING_PLAYER = 'white';
 
-import {getNextRules} from './rules.js';
-import {redis, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX} from './_lib/redis.js';
+import { redis, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX } from './_lib/redis.js';
 import pusher from './_lib/pusher.js';
 import { checkPassword } from './auth.js';
+import { buildGame, serializeBoard, serializeTurn } from '../shared/engine.js';
+import { applyRuleSelection, finishTurn, autoResolveExpiredChoices } from '../shared/effects.js';
+
+const CHANNEL_NAME = 'chess-events';
+const EVENT_TYPE_BOARD_UPDATE = 'board-event';
+const EVENT_TYPE_TURN_UPDATE = 'turn-event';
 
 export default async function handler(req, res) {
 
     // GET TURN STATE
     if (req.method === 'GET') {
-        
+
         console.log("ATTEMPTING TO GET TURN");
 
         // First check the client's password against the real password on Vercel
@@ -39,13 +56,11 @@ export default async function handler(req, res) {
         }
 
         try {
-            // Return the full hash of the board state
+            // Return the full hash of the turn state
             const rawTurnState = await redis.hgetall(REDIS_TURNS_CURRENT);
             console.log("Here's the current Turn State from DB:", rawTurnState);
             // Sorta janky, but doing this to match the Pusher naming convention for the client
-            // The alternative is to send ALL clients the board state via pusher but that feels wasteful
-            // fuck it we ball
-            const newTurn = {newTurn: rawTurnState} 
+            const newTurn = { newTurn: rawTurnState }
             return res.status(200).json({
                 success: true,
                 turnState: newTurn,
@@ -57,7 +72,7 @@ export default async function handler(req, res) {
                 success: false,
                 error: 'Failed to retrieve board status from database'
             });
-        } 
+        }
 
     } else if (req.method === 'POST') {
 
@@ -65,14 +80,14 @@ export default async function handler(req, res) {
 
             // This endpoint can process 3 things:
             //      Resetting the turn state
-            //      Incrementing a turn
-            //      Selecting a rule
-            
+            //      Incrementing a turn (Sandbox Mode only — api/game.js does this for enforced play)
+            //      Selecting a rule (which now EXECUTES the rule on the board)
+
             const { clientSecret, userId, action, payload } = req.body;
 
             // First check the client's password against the real password on Vercel
             if (!checkPassword(clientSecret)) {
-                console.log("A client provided the wrong password, rejecting the Get Board State Request, password was ", clientSecret);
+                console.log("A client provided the wrong password, rejecting the request, password was ", clientSecret);
                 return res.status(401).json({
                     success: false,
                     message: "Invalid password, get outta here ya rascal"
@@ -83,36 +98,84 @@ export default async function handler(req, res) {
                 return res.status(400).json({ success: false, error: 'Missing action type' });
             }
 
-            // First get the current turn state
-            const currentTurnState = await redis.hgetall(REDIS_TURNS_CURRENT);
-            console.log("got the turn state from DB", currentTurnState);
+            // Load both current states — rule effects touch the board too
+            const [currentBoardState, currentTurnState] = await Promise.all([
+                redis.hgetall(REDIS_BOARD_CURRENT),
+                redis.hgetall(REDIS_TURNS_CURRENT),
+            ]);
 
             switch (action) {
                 case 'RESET_TURNS':
                     console.log("Resetting Turns...")
-                    await resetTurns();    
+                    await resetTurns(currentTurnState);
                     return res.status(200).json({
                         success: true,
                         message: `Reset the turn state`,
                     });
-                case 'INCREMENT_TURN':
-                    await incrementTurn(currentTurnState, userId);
+                case 'INCREMENT_TURN': {
+                    // Sandbox Mode turn advance: no move validation, but rule
+                    // timers, portals, expiry effects and rule offers still run
+                    const game = buildGame(currentBoardState || {}, currentTurnState || {});
+                    autoResolveExpiredChoices(game);
+                    const { ruleJustExpired } = finishTurn(game);
+                    await saveAndBroadcast(game, currentBoardState, currentTurnState, {
+                        userId, ruleJustExpired, snapshot: false,
+                    });
                     return res.status(200).json({
                         success: true,
                         message: `New turns successfully processed`,
                     });
-                case 'SELECT_RULE':
-                    await handleRuleSelection(currentTurnState, userId, payload);
+                }
+                case 'SELECT_RULE': {
+                    const game = buildGame(currentBoardState || {}, currentTurnState || {});
+                    autoResolveExpiredChoices(game);
+
+                    // In enforced play only the player to move picks the rule.
+                    // (Seats unclaimed = sandbox/stream mode: anyone may pick.)
+                    const seats = game.turn.seats;
+                    const seatOf = seats.white === userId ? 'white' : seats.black === userId ? 'black' : null;
+                    const seatsClaimed = seats.white || seats.black;
+                    if (seatsClaimed && seatOf !== game.turn.currentPlayer) {
+                        return res.status(200).json({
+                            success: false,
+                            message: `Only ${game.turn.currentPlayer} may pick the new rule`,
+                        });
+                    }
+
+                    const chosen = game.turn.newRuleChoices[payload.chosenIndex];
+                    if (!chosen) {
+                        return res.status(200).json({ success: false, message: 'That rule choice is not available' });
+                    }
+                    console.log("Here's our selected rule!", chosen);
+
+                    // Persistent rules join the active list BEFORE execution so
+                    // setup effects can write into rule.data
+                    game.turn.newRuleChoices = [];
+                    let ruleInstance = { ...chosen, data: chosen.data || {} };
+                    if (!ruleInstance.isInstant) {
+                        game.turn.currentRules.push(ruleInstance);
+                        ruleInstance = game.turn.currentRules[game.turn.currentRules.length - 1];
+                    }
+
+                    // *** EXECUTE THE RULE ***
+                    applyRuleSelection(game, ruleInstance, game.turn.currentPlayer);
+
+                    game.turn.justSelectedRule = true;
+                    await saveAndBroadcast(game, currentBoardState, currentTurnState, {
+                        userId, ruleJustExpired: false, snapshot: true,
+                    });
                     return res.status(200).json({
                         success: true,
                         message: `Successfully selected a new rule!`,
+                        events: game.events,
                     });
+                }
                 default:
                     return res.status(400).json({ success: false, error: 'Unknown action type' });
             }
         } catch (error) {
             console.error('Redis SET error:', error);
-            return res.status(500).json({success: false, error: 'Failed to update board state in database'});
+            return res.status(500).json({ success: false, error: 'Failed to update board state in database' });
         }
     }
     // Method not allowed
@@ -122,23 +185,7 @@ export default async function handler(req, res) {
     });
 }
 
-async function resetTurns() {
-
-    // const test1 = {
-    //     title: "Pacifist",
-    //     description: "No piece can take any other pieces",
-    //     turnsLeft: 5,
-    //     isInstant: false
-    // };
-    // const mockCurrentRules = [test1, test2, test3, test4];
-
-    // const newRuleMock1 = {
-    //     title: "Swap the Fellas",
-    //     description: "Both team's Rooks swap places",
-    //     turnsLeft: 5,
-    //     isInstant: true
-    // };
-    // const mockNewRules = [newRuleMock1, newRuleMock2, newRuleMock3];
+async function resetTurns(previousTurnState) {
 
     const newTurn = {
         currentTurn: STARTING_TURN,
@@ -146,128 +193,67 @@ async function resetTurns() {
         currentPlayer: STARTING_PLAYER,
         currentRules: [],
         newRuleChoices: [],
+        // Players keep their seats across board resets
+        seats: (previousTurnState && previousTurnState.seats) || { white: null, black: null },
+        pendingChoices: [],
+        gameOver: null,
+        coinFlip: null,
+        lastMove: null,
     };
     console.log("Here's the state we're saving to the DB!", newTurn);
 
     // Trigger Pusher event to tell all clients that new rule choices are live
-    const CHANNEL_NAME = 'chess-events';
-    const EVENT_TYPE_TURN_UPDATE = 'turn-event';
-    await pusher.trigger(CHANNEL_NAME, EVENT_TYPE_TURN_UPDATE, {newTurn});
+    await pusher.trigger(CHANNEL_NAME, EVENT_TYPE_TURN_UPDATE, { newTurn });
     console.log(`Triggered Pusher event for Channel:${CHANNEL_NAME} and EventType:${EVENT_TYPE_TURN_UPDATE}`);
 
     // Now, we write all the data back to the DB
     // Reminder: Redis values must all be strings, not raw JSON, so we stringify every value here
     // Note: we do NOT delete the turn history here! That way you can "Undo Turn" to undo the board reset.
-        // This is strictly as a failsafe in case someone accidentally resets the board
+    //     This is strictly as a failsafe in case someone accidentally resets the board
     const stringifiedState = Object.fromEntries(
         Object.entries(newTurn).map(([id, data]) => [id, JSON.stringify(data)])
     );
-    await redis.hset(REDIS_TURNS_CURRENT, stringifiedState);
+    await redis.multi()
+        .del(REDIS_TURNS_CURRENT)
+        .hset(REDIS_TURNS_CURRENT, stringifiedState)
+        .exec();
 }
 
-async function incrementTurn(currentTurn, userId) {
+// Saves the game's board + turn state (optionally snapshotting the previous
+// state onto the undo stack) and broadcasts both Pusher events.
+async function saveAndBroadcast(game, prevBoardState, prevTurnState, { userId, ruleJustExpired, snapshot }) {
+    const newBoard = serializeBoard(game);
+    const newTurn = serializeTurn(game);
 
-    console.log("We're incrementing a turn! Here's currentTurn", currentTurn);
-
-    // A turn has been made! Process our turns state accordingly
-    let newTurn = {};
-    newTurn.currentTurn = currentTurn.currentTurn + 1;
-    newTurn.nextTurnWithNewRules = currentTurn.nextTurnWithNewRules;
-    if (currentTurn.currentPlayer == "white") {
-        newTurn.currentPlayer = "black";
-    } else {
-        newTurn.currentPlayer = "white";
-    }
-
-    // Now update turns left on the current rules (removing any that have hit 0 turns left)
-    newTurn.currentRules = [];
-    let ruleJustExpired = false;
-    for (const rule of currentTurn.currentRules) {
-        const newTurnsLeft = rule.turnsLeft - 1;
-        if (newTurnsLeft > 0) { // Only keep rules that still have turns left
-            newTurn.currentRules.push({
-                title: rule.title,
-                description: rule.description,
-                turnsLeft: newTurnsLeft,
-                isInstant: rule.isInstant
-            });
-        } else {
-            // This means a rule expired on this turn!
-            // We don't keep it around, but we send an additional flag to the client so they can play a sound
-            ruleJustExpired = true;
-        }
-    }
-
-    // Copy over the list of current rules that we've currently got stored (it's usually empty)
-    newTurn.newRuleChoices = currentTurn.newRuleChoices;
-
-    // Finally - check if it's time for new rules!
-    if (newTurn.currentTurn === newTurn.nextTurnWithNewRules) {
-        newTurn.nextTurnWithNewRules += TURNS_UNTIL_NEW_RULES;
-        newTurn.newRuleChoices = getNextRules(newTurn.currentRules);
-    } 
-
-    console.log("Incremented turn successfully, now saving and sending this turn state:", newTurn);
-
-    // Trigger Pusher event to tell all clients that new rule choices are live
-    const CHANNEL_NAME = 'chess-events';
-    const EVENT_TYPE_TURN_UPDATE = 'turn-event';
-    await pusher.trigger(CHANNEL_NAME, EVENT_TYPE_TURN_UPDATE, {newTurn, userId, ruleJustExpired});
-    console.log(`Triggered Pusher event for Channel:${CHANNEL_NAME} and EventType:${EVENT_TYPE_TURN_UPDATE}`);
-
-    // Finally, write the new turn state data back to the DB
-    // Reminder: Redis values must all be strings, not raw JSON, so we stringify every value here
-    const stringifiedState = Object.fromEntries(
+    const stringifiedBoard = Object.fromEntries(
+        Object.entries(newBoard).map(([id, data]) => [id, JSON.stringify(data)])
+    );
+    const stringifiedTurn = Object.fromEntries(
         Object.entries(newTurn).map(([id, data]) => [id, JSON.stringify(data)])
     );
-    await redis.hset(REDIS_TURNS_CURRENT, stringifiedState);
-}
 
-async function handleRuleSelection(newTurn, userId, payload) {
-
-    // Grab the chosen rule
-    const selectedRule = newTurn.newRuleChoices[payload.chosenIndex];
-    console.log("Here's our selected rule!", selectedRule)
-
-    // If it's a persistent rule, add it to our list of current rules
-    if (!selectedRule.isInstant) {
-        newTurn.currentRules.push(selectedRule);
-    }
-    // Empty our rule choices
-    newTurn.newRuleChoices = [];
-
-    // Send a flag to client so they can update visuals more easily
-    newTurn.justSelectedRule = true;
-
-    // Trigger Pusher event so that clients update with the new rules
-    const CHANNEL_NAME = 'chess-events';
-    const EVENT_TYPE_TURN_UPDATE = 'turn-event';
-    await pusher.trigger(CHANNEL_NAME, EVENT_TYPE_TURN_UPDATE, {newTurn, userId});
-    console.log(`Triggered Pusher event for Channel:${CHANNEL_NAME} and EventType:${EVENT_TYPE_TURN_UPDATE}`);
-
-    // Get the current state of board and turn
-    // This is the one action handled solely by turns.js, so it's gotta do the history saving
-    const [prevBoardState, prevTurnState] = await Promise.all([
-        redis.hgetall(REDIS_BOARD_CURRENT),
-        redis.hgetall(REDIS_TURNS_CURRENT),
-    ]);
-
-    // Now we write the new turn state and the previous turn snapshot to the DB
-    // redis.multi() lets us do multiple DB calls simultaneously
-    const stringifiedState = Object.fromEntries(
-        Object.entries(newTurn).map(([id, data]) => [id, JSON.stringify(data)])
-    );
     const pipeline = redis.multi();
-    if (prevBoardState && prevTurnState) {
-        const snapshot = JSON.stringify({
+    if (snapshot && prevBoardState && prevTurnState) {
+        const undoSnapshot = JSON.stringify({
             boardState: prevBoardState,
             turnState: prevTurnState,
             timestamp: Date.now(),
         });
-        pipeline.lpush(REDIS_UNDO_STACK, snapshot);
+        pipeline.lpush(REDIS_UNDO_STACK, undoSnapshot);
         pipeline.ltrim(REDIS_UNDO_STACK, 0, UNDO_STACK_MAX - 1);
     }
-    pipeline.hset(REDIS_TURNS_CURRENT, stringifiedState);
+    pipeline.del(REDIS_BOARD_CURRENT);
+    pipeline.hset(REDIS_BOARD_CURRENT, stringifiedBoard);
+    pipeline.del(REDIS_TURNS_CURRENT);
+    pipeline.hset(REDIS_TURNS_CURRENT, stringifiedTurn);
     await pipeline.exec();
-}
 
+    await Promise.all([
+        pusher.trigger(CHANNEL_NAME, EVENT_TYPE_BOARD_UPDATE, {
+            newState: newBoard, events: game.events,
+        }),
+        pusher.trigger(CHANNEL_NAME, EVENT_TYPE_TURN_UPDATE, {
+            newTurn, userId, ruleJustExpired, events: game.events,
+        }),
+    ]);
+}

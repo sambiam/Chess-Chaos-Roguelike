@@ -31,11 +31,13 @@ let _postBoardState = null;
 let _zoomPan = null;
 let _boardSize = 800;
 let _currentlyHaveRules = false;
+let _onRuleCardClick = null;
 
-export function initView({ postBoardState, zoomPan, boardSize }) {
+export function initView({ postBoardState, zoomPan, boardSize, onRuleCardClick }) {
     _postBoardState = postBoardState;
     _zoomPan = zoomPan;
     _boardSize = boardSize;
+    _onRuleCardClick = onRuleCardClick;
 }
 
 // =============================================================================
@@ -186,36 +188,51 @@ export const renderSettingsPanel = () => {
     settingsPanel.appendChild(fragment);
 };
 
+const createPieceElement = (piece) => {
+    const emojiPositions = ['tl', 'tr', 'bl', 'br'];
+    const pieceEl = document.createElement('div');
+    pieceEl.className = 'piece';
+    pieceEl.id = `piece-${piece.slot}`;
+
+    piece.emojiElements = emojiPositions.map(pos => {
+        const emojiEl = document.createElement('span');
+        emojiEl.className = `piece-emoji piece-emoji-${pos}`;
+        emojiEl.style.display = 'none';
+        pieceEl.appendChild(emojiEl);
+        return emojiEl;
+    });
+
+    piece.element = pieceEl;
+
+    updatePieceImage(piece);
+    updatePieceCaptureState(piece);
+    updatePiecePosition(piece);
+    updatePieceEmojis(piece);
+
+    return pieceEl;
+};
+
 export const renderPieces = () => {
     const fragment = document.createDocumentFragment();
-    const emojiPositions = ['tl', 'tr', 'bl', 'br'];
-    
     Object.values(state.pieces).forEach(piece => {
-        const pieceEl = document.createElement('div');
-        pieceEl.className = 'piece';
-        pieceEl.id = `piece-${piece.slot}`;
-
-        piece.emojiElements = emojiPositions.map(pos => {
-            const emojiEl = document.createElement('span');
-            emojiEl.className = `piece-emoji piece-emoji-${pos}`;
-            emojiEl.style.display = 'none';
-            pieceEl.appendChild(emojiEl);
-            return emojiEl;
-        });
-        
-        piece.element = pieceEl;
-
-        updatePieceImage(piece);
-        updatePieceCaptureState(piece);
-        updatePiecePosition(piece);
-        updatePieceEmojis(piece);
-
-        fragment.appendChild(pieceEl);
+        fragment.appendChild(createPieceElement(piece));
     });
 
     piecesLayer.innerHTML = '';
     piecesLayer.appendChild(fragment);
     refreshAllReviveButtons();
+};
+
+// Creates DOM for a rule-spawned piece arriving mid-game from the server
+export const ensurePieceDOM = (piece) => {
+    if (piece.element) return;
+    piecesLayer.appendChild(createPieceElement(piece));
+};
+
+// Removes the DOM element of a despawned piece (board reset cleanup)
+export const removePieceDOM = (slot) => {
+    const el = document.getElementById(`piece-${slot}`);
+    if (el) el.remove();
 };
 
 // =============================================================================
@@ -359,8 +376,9 @@ export const handleDeselectPiece = () => {
 
 export const handleResetBoard = () => {
     handleDeselectPiece();
-    const pieces = resetBoard();
-    pieces.forEach(piece => {
+    const { resetPieces, removedSlots } = resetBoard();
+    removedSlots.forEach(removePieceDOM);
+    resetPieces.forEach(piece => {
         updatePiecePosition(piece);
         updatePieceCaptureState(piece);
         updatePieceNotation(piece);
@@ -377,6 +395,9 @@ export const handleResetBoard = () => {
         }
     }
     hideHighlight();
+    clearLegalMoves();
+    clearChoiceUI();
+    renderGameOver(null);
     _currentlyHaveRules = false;
     _zoomPan.fitAndCenterContent(_boardSize, _boardSize);
     _zoomPan.resetInteractionState();
@@ -851,6 +872,8 @@ export function renderTurnUpdate({ newTurnState, playerChanged, ruleJustExpired,
             }
             newRuleCard.addEventListener('click', async () => {
                 if (document.getElementById('ignore-turns-checkbox').checked) return;
+                // In enforced play only the player to move picks the rule
+                if (_onRuleCardClick && !_onRuleCardClick()) return;
                 closeNewRuleVisuals();
                 if (onRuleSelect) {
                     await onRuleSelect(turns.newRuleChoices.indexOf(nextRule));
@@ -862,3 +885,192 @@ export function renderTurnUpdate({ newTurnState, playerChanged, ruleJustExpired,
         startBackground(newRulesEl);
     }    
 }
+
+// =============================================================================
+// LEGAL MOVE INDICATORS (Enforced PVP mode)
+// =============================================================================
+// Renders a dot on every square the selected piece may legally move to.
+
+const legalMovesLayer = document.createElement('div');
+legalMovesLayer.className = 'legal-moves-layer';
+document.getElementById('chess-stage').appendChild(legalMovesLayer);
+
+export const renderLegalMoves = (moves) => {
+    legalMovesLayer.innerHTML = '';
+    for (const move of moves) {
+        const dot = document.createElement('div');
+        dot.className = move.captureSlot ? 'legal-move-dot capture' : 'legal-move-dot';
+        if (move.special === 'push') dot.classList.add('push');
+        dot.style.left = `${move.col * SQUARE_SIZE}px`;
+        dot.style.top = `${move.row * SQUARE_SIZE}px`;
+        legalMovesLayer.appendChild(dot);
+    }
+};
+
+export const clearLegalMoves = () => {
+    legalMovesLayer.innerHTML = '';
+};
+
+// =============================================================================
+// PENDING CHOICE UI (rule decisions, synced across clients)
+// =============================================================================
+// The choosing player sees a banner with the prompt + countdown, and the
+// candidate pieces/squares glow on the board. The other player sees a
+// "waiting" banner. Clicks are handled by app.js via getChoiceCandidateAt.
+
+const choiceBanner = document.createElement('div');
+choiceBanner.className = 'choice-banner hidden';
+document.body.appendChild(choiceBanner);
+
+const choiceLayer = document.createElement('div');
+choiceLayer.className = 'choice-layer';
+document.getElementById('chess-stage').appendChild(choiceLayer);
+
+let _activeChoice = null;
+
+// Expands a choice's candidates into highlightable squares
+const choiceCandidateSquares = (choice) => {
+    const squares = [];
+    if (choice.kind === 'piece') {
+        for (const slot of choice.candidates) {
+            const piece = state.pieces[slot];
+            if (piece && !piece.captured) squares.push({ ...piece.position, value: slot });
+        }
+    } else if (choice.kind === 'square') {
+        for (const key of choice.candidates) {
+            const [col, row] = String(key).split(',').map(Number);
+            squares.push({ col, row, value: key });
+        }
+    } else if (choice.kind === 'column') {
+        for (const col of choice.candidates) {
+            for (let row = 0; row < 8; row++) squares.push({ col: Number(col), row, value: Number(col) });
+        }
+    } else if (choice.kind === 'row') {
+        for (const row of choice.candidates) {
+            for (let col = 0; col < 8; col++) squares.push({ col, row: Number(row), value: Number(row) });
+        }
+    }
+    return squares;
+};
+
+// Returns the candidate "selection" value at a clicked square, or undefined
+export const getChoiceCandidateAt = (col, row) => {
+    if (!_activeChoice) return undefined;
+    const hit = choiceCandidateSquares(_activeChoice).find(sq => sq.col === col && sq.row === row);
+    return hit ? hit.value : undefined;
+};
+
+export const renderChoiceUI = ({ choice, isMine, secondsLeft }) => {
+    _activeChoice = isMine ? choice : null;
+    choiceLayer.innerHTML = '';
+    if (!choice) {
+        choiceBanner.classList.add('hidden');
+        return;
+    }
+
+    choiceBanner.classList.remove('hidden');
+    if (isMine) {
+        choiceBanner.innerHTML = `
+            <span class="choice-prompt">${choice.prompt}</span>
+            <span class="choice-timer">${secondsLeft}s</span>`;
+        choiceBanner.classList.add('mine');
+        for (const sq of choiceCandidateSquares(choice)) {
+            const el = document.createElement('div');
+            el.className = 'choice-candidate';
+            el.style.left = `${sq.col * SQUARE_SIZE}px`;
+            el.style.top = `${sq.row * SQUARE_SIZE}px`;
+            choiceLayer.appendChild(el);
+        }
+    } else {
+        choiceBanner.classList.remove('mine');
+        choiceBanner.innerHTML = `
+            <span class="choice-prompt">Waiting for ${choice.color} to choose... (${choice.prompt})</span>
+            <span class="choice-timer">${secondsLeft}s</span>`;
+    }
+};
+
+export const clearChoiceUI = () => {
+    _activeChoice = null;
+    choiceLayer.innerHTML = '';
+    choiceBanner.classList.add('hidden');
+};
+
+// =============================================================================
+// SEAT UI (who is playing which color)
+// =============================================================================
+
+export const renderSeats = ({ seats, mySeat, onClaim, onRelease }) => {
+    const container = document.getElementById('seats-panel');
+    if (!container) return;
+    container.innerHTML = '';
+
+    for (const seat of ['white', 'black']) {
+        const button = document.createElement('button');
+        button.className = `seat-btn seat-${seat}`;
+        const occupant = seats[seat];
+        if (mySeat === seat) {
+            button.textContent = `You are ${seat.toUpperCase()} — click to leave`;
+            button.classList.add('mine');
+            button.addEventListener('click', onRelease);
+        } else if (occupant) {
+            button.textContent = `${seat.toUpperCase()} — taken`;
+            button.disabled = true;
+        } else {
+            button.textContent = `Play as ${seat.toUpperCase()}`;
+            button.addEventListener('click', () => onClaim(seat));
+        }
+        container.appendChild(button);
+    }
+};
+
+// =============================================================================
+// GAME OVER OVERLAY
+// =============================================================================
+
+const gameOverOverlay = document.createElement('div');
+gameOverOverlay.className = 'game-over-overlay hidden';
+document.body.appendChild(gameOverOverlay);
+
+export const renderGameOver = (gameOver) => {
+    if (!gameOver) {
+        gameOverOverlay.classList.add('hidden');
+        gameOverOverlay.innerHTML = '';
+        return;
+    }
+    gameOverOverlay.classList.remove('hidden');
+    gameOverOverlay.innerHTML = `
+        <div class="game-over-card">
+            <h1>${gameOver.winner.toUpperCase()} WINS!</h1>
+            <p>${gameOver.reason}</p>
+            <p class="game-over-hint">Press Reset Board to play again</p>
+        </div>`;
+};
+
+// =============================================================================
+// EVENT TOASTS (server-side rule/engine happenings)
+// =============================================================================
+
+const toastContainer = document.createElement('div');
+toastContainer.className = 'toast-container';
+document.body.appendChild(toastContainer);
+
+const seenEventKeys = new Set();
+
+export const showEvents = (events) => {
+    if (!events || !events.length) return;
+    // Both the board-event and turn-event carry the same events array —
+    // de-dupe so each batch only renders once
+    const key = JSON.stringify(events);
+    if (seenEventKeys.has(key)) return;
+    seenEventKeys.add(key);
+    setTimeout(() => seenEventKeys.delete(key), 3000);
+
+    for (const text of events.slice(0, 8)) {
+        const toast = document.createElement('div');
+        toast.className = 'event-toast';
+        toast.textContent = text;
+        toastContainer.appendChild(toast);
+        setTimeout(() => toast.classList.add('fading'), 5200);
+        setTimeout(() => toast.remove(), 6000);
+    }
+};
