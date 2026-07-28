@@ -801,10 +801,15 @@ export const buildGame = (boardState, turnState) => {
         };
     }
     const turn = { ...DEFAULT_TURN_STATE, ...turnState };
-    turn.currentRules = turn.currentRules || [];
-    turn.newRuleChoices = turn.newRuleChoices || [];
-    turn.pendingChoices = turn.pendingChoices || [];
-    turn.seats = turn.seats || { white: null, black: null };
+    // DEFAULT_TURN_STATE is a shared module-level object, so any field the
+    // stored turn hash is missing would otherwise come back as a reference to
+    // ITS array/object. The engine mutates these in place (currentRules.push,
+    // seats[seat] = userId), which on a warm serverless instance would leak
+    // rules and seat claims from one request into the next. Always copy.
+    turn.currentRules = [...(turn.currentRules || [])];
+    turn.newRuleChoices = [...(turn.newRuleChoices || [])];
+    turn.pendingChoices = [...(turn.pendingChoices || [])];
+    turn.seats = { white: null, black: null, ...(turn.seats || {}) };
     return {
         pieces,
         boardEffects: { ...(boardState.boardEffects || {}) },

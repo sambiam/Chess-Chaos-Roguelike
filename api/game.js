@@ -10,6 +10,8 @@ Actions (POST body: { clientSecret, userId, action, payload }):
     MOVE         payload: { slot, target: { col, row } }
     PASS         (only legal when the mover truly has no legal moves)
     CHOICE       payload: { choiceId, selection, auto? }
+    SELECT       payload: { slot: string | null } — share the current selection
+    RESET_GAME   wipes the board back to the standard 32 pieces
     CLAIM_SEAT   payload: { seat: 'white' | 'black' }
     RELEASE_SEAT
     LEGAL_MOVES  payload: { } — returns current legal moves (for debugging)
@@ -25,7 +27,9 @@ import {
     applyMove,
     mustPass,
     getAllLegalMoves,
+    DEFAULT_TURN_STATE,
 } from '../shared/engine.js';
+import { createStartingPieces } from '../shared/defs.js';
 import {
     finishTurn,
     resolveChoice,
@@ -202,6 +206,55 @@ export default async function handler(req, res) {
                 result = { success: true, message: 'Choice resolved' };
                 mutated = true;
                 snapshot = true;
+                break;
+            }
+
+            // Sharing a selection must NOT let a client write the board. It used
+            // to POST the whole client mirror to /api/board-state, so a tab that
+            // had missed a reset (a second tab of the same browser skips its own
+            // userId's broadcasts) pushed the previous game's rule-spawned
+            // pieces straight back into Redis — that is how Hot Drop's Queens
+            // reappeared on the first move of a fresh game. Only selectedSlot
+            // moves now; the reply is the authoritative board, which also heals
+            // whichever client was stale.
+            case 'SELECT': {
+                const slot = payload.slot ?? null;
+                if (slot !== null && !game.pieces[slot]) {
+                    result = { success: false, message: 'No such piece to select' };
+                    break;
+                }
+                if (slot !== null && game.pieces[slot].captured) {
+                    result = { success: false, message: 'That piece is captured' };
+                    break;
+                }
+                game.selectedSlot = slot;
+                result = { success: true, message: 'Selection shared' };
+                mutated = true;
+                break;
+            }
+
+            // Rebuilt server-side from shared/defs.js rather than from whatever
+            // the resetting client happens to hold in memory
+            case 'RESET_GAME': {
+                game.pieces = createStartingPieces();
+                game.boardEffects = {};
+                game.selectedSlot = null;
+                game.highlightedSquare = null;
+                game.turn = {
+                    ...DEFAULT_TURN_STATE,
+                    // Fresh arrays: DEFAULT_TURN_STATE is a shared module-level
+                    // object, so spreading it alone would hand out the same
+                    // array instances every reset
+                    currentRules: [],
+                    newRuleChoices: [],
+                    pendingChoices: [],
+                    // Players keep their seats across board resets
+                    seats: { ...game.turn.seats },
+                };
+                game.events.push('The board has been reset');
+                result = { success: true, message: 'Board reset' };
+                mutated = true;
+                snapshot = true;   // a reset stays undoable
                 break;
             }
 
