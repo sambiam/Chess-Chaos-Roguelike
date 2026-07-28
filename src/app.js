@@ -40,7 +40,7 @@ import {
     pullServerBoardState,
     pullServerTurnState,
 } from './network.js';
-import { apiGet, apiPost, getUserId, playCaptureSounds } from './utils.js';
+import { apiGet, apiPost, getUserId, getTabId, playCaptureSounds } from './utils.js';
 import { startPageBackground } from './animated-bg.js';
 import { getAllLegalMoves } from '../shared/engine.js';
 
@@ -119,12 +119,20 @@ const screenToSquare = (clientX, clientY) =>
 // HELPERS
 // =============================================================================
 
-const postBoardState = (extra = {}) => apiPost('/api/board-state', {
-    clientSecret,
-    userId: getUserId(),
-    newState: getSimpleBoardState(),
-    ...extra,
-});
+const postBoardState = async (extra = {}) => {
+    const result = await apiPost('/api/board-state', {
+        clientSecret,
+        userId: getUserId(),
+        // Per-tab, so the echo we skip is genuinely our own (see getTabId)
+        tabId: getTabId(),
+        newState: getSimpleBoardState(),
+        ...extra,
+    });
+    // The server rejected our board because it was built from pieces it no
+    // longer has — we are the stale one, so take its board instead of ours
+    if (result && result.resync) await pullServerBoardState();
+    return result;
+};
 
 const postGameAction = async (action, payload = {}) => {
     const result = await apiPost('/api/game', {

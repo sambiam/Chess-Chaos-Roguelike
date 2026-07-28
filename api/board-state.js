@@ -16,6 +16,7 @@ So each each value is a stringify'ed JSON object, rather than an actual JSON obj
 import {redis, redisUnavailable, withStateLock, REDIS_BOARD_CURRENT, REDIS_TURNS_CURRENT, REDIS_UNDO_STACK, UNDO_STACK_MAX} from './_lib/redis.js';
 import pusher from './_lib/pusher.js';
 import { checkPassword } from './auth.js';
+import { filterResurrectedSlots, isPieceSlot } from '../shared/defs.js';
 
 export default async function handler(req, res) {
 
@@ -67,7 +68,7 @@ export default async function handler(req, res) {
 
         try {
 
-            const { clientSecret, userId, newState, skipSnapshot } = req.body;
+            const { clientSecret, userId, tabId, newState, skipSnapshot } = req.body;
 
             // First check the client's password against the real password on Vercel
             if (!checkPassword(clientSecret)) {
@@ -82,10 +83,11 @@ export default async function handler(req, res) {
                 return res.status(400).json({ success: false, error: "Did not send value board state"});
             }
 
-            // Reminder: Redis values must all be strings, not raw JSON, so we stringify every value here
-            const stringifiedState = Object.fromEntries(
-                Object.entries(newState).map(([id, data]) => [id, JSON.stringify(data)])
-            );
+            // A board with no pieces at all is never a legitimate client mirror,
+            // and writing it would empty the hash for everyone
+            if (!Object.keys(newState).some(isPieceSlot)) {
+                return res.status(400).json({ success: false, error: "Board state contains no pieces" });
+            }
 
             /*
             Adding the undo-turn feature made all this shit whacky, buckle up chucklehead:
@@ -120,24 +122,40 @@ export default async function handler(req, res) {
             // next server-authoritative action — that's how ghost Queens from
             // a previous game reappeared on the first move of a new one.
             //
+            // The mirror-image failure is a client posting pieces the server no
+            // longer has, so the incoming state is filtered against the
+            // authoritative hash first (see filterResurrectedSlots).
+            //
             // The whole read-modify-write runs under the state lock so it
             // cannot interleave with a move being processed in /api/game.
-            await withStateLock(async () => {
-                if (skipSnapshot) {
-                    await redis.multi()
-                        .del(REDIS_BOARD_CURRENT)
-                        .hset(REDIS_BOARD_CURRENT, stringifiedState)
-                        .exec();
-                    return;
-                }
-                // Grab current board + turn state to create an undo snapshot
+            const { savedState, droppedSlots } = await withStateLock(async () => {
+                // Grab the current board (and, unless this is a selection-only
+                // update, the turn state for the undo snapshot)
                 const [prevBoardState, prevTurnState] = await Promise.all([
                     redis.hgetall(REDIS_BOARD_CURRENT),
-                    redis.hgetall(REDIS_TURNS_CURRENT),
+                    skipSnapshot ? Promise.resolve(null) : redis.hgetall(REDIS_TURNS_CURRENT),
                 ]);
 
+                // Clients may update pieces, never invent them
+                const { board, dropped } = filterResurrectedSlots(newState, prevBoardState || {});
+                if (dropped.length > 0) {
+                    console.warn(
+                        "Ignored rule-spawned slots a client tried to restore (they are not on the authoritative board):",
+                        dropped.join(","),
+                    );
+                }
+                if (!Object.keys(board).some(isPieceSlot)) {
+                    // Nothing legitimate left to write — leave the board alone
+                    return { savedState: null, droppedSlots: dropped };
+                }
+
+                // Reminder: Redis values must all be strings, not raw JSON, so we stringify every value here
+                const stringifiedState = Object.fromEntries(
+                    Object.entries(board).map(([id, data]) => [id, JSON.stringify(data)])
+                );
+
                 const pipeline = redis.multi();
-                if (prevBoardState && prevTurnState) {
+                if (!skipSnapshot && prevBoardState && prevTurnState) {
                     const snapshot = JSON.stringify({
                         boardState: prevBoardState,
                         turnState: prevTurnState,
@@ -149,18 +167,36 @@ export default async function handler(req, res) {
                 pipeline.del(REDIS_BOARD_CURRENT);
                 pipeline.hset(REDIS_BOARD_CURRENT, stringifiedState);
                 await pipeline.exec();
+
+                return { savedState: board, droppedSlots: dropped };
             });
 
-            // Trigger Pusher event to give all clients the new board state
+            if (!savedState) {
+                return res.status(409).json({
+                    success: false,
+                    resync: true,   // tells the client to pull the real board
+                    message: 'That board state only contained pieces the server no longer has — resyncing',
+                });
+            }
+
+            // Trigger Pusher event to give all clients the new board state.
+            // tabId lets the sending TAB skip its own echo — but when we had to
+            // drop slots the sender is out of date, so we deliberately leave it
+            // off and let the sanitized board heal it too.
             const CHANNEL_NAME = 'chess-events';
             const EVENT_TYPE_BOARD_UPDATE = 'board-event';
-            await pusher.trigger(CHANNEL_NAME, EVENT_TYPE_BOARD_UPDATE, {userId: userId, newState: newState});
+            await pusher.trigger(CHANNEL_NAME, EVENT_TYPE_BOARD_UPDATE, {
+                userId: userId,
+                tabId: droppedSlots.length > 0 ? null : (tabId ?? null),
+                newState: savedState,
+            });
             console.log(`Triggered Pusher event for Channel:${CHANNEL_NAME} and EventType:${EVENT_TYPE_BOARD_UPDATE}`);
-            
+
             // Send response to client
             return res.status(200).json({
                 success: true,
-                message: `New board state successfully saved`
+                message: `New board state successfully saved`,
+                droppedSlots,
             });
         
         } catch (error) {

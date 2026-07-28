@@ -15,7 +15,7 @@ import {
     removePieceDOM,
     showEvents,
 } from './board-view.js';
-import { apiGet, apiPost, getUserId, playCaptureSounds } from './utils.js';
+import { apiGet, apiPost, getUserId, getTabId, playCaptureSounds } from './utils.js';
 
 // =============================================================================
 // MODULE CONFIGURATION
@@ -25,6 +25,7 @@ let _clientSecret = '';
 let _onStateChanged = null;   // app.js hook: refresh seats/choices/pass/game-over UI
 let pusherClient = null;
 let pusherChannel = null;
+let hasConnectedBefore = false;   // set once we have been online at least once
 
 export function initNetwork({ clientSecret, onStateChanged }) {
     _clientSecret = clientSecret;
@@ -66,10 +67,19 @@ function initializePusher() {
         handleTurnUpdate(data);
 	});
 
-	pusherClient.connection.bind('connected', () => {
+	pusherClient.connection.bind('connected', async () => {
         const headerText = document.getElementById("pusher-status");
         headerText.textContent = "Connected to Pusher!"
 		console.log('Pusher connected!');
+        // Everything broadcast while we were offline never reached us — a Reset
+        // Board included. Acting on that stale mirror is what put the previous
+        // game's rule-spawned pieces back, so re-pull instead of trusting it.
+        // (The first connect is skipped: initializeApp pulls right after this.)
+        if (hasConnectedBefore) {
+            await pullServerBoardState();
+            await pullServerTurnState();
+        }
+        hasConnectedBefore = true;
 	});
 	pusherClient.connection.bind('disconnected', () => {
         const headerText = document.getElementById("pusher-status");
@@ -121,10 +131,12 @@ export const pullServerTurnState = async () => {
 // =============================================================================
 
 const handleBoardUpdate = (boardData) => {
-    // Sandbox-mode edits are broadcast with the editor's userId so the editor
-    // can skip its own echo. Authoritative /api/game broadcasts carry NO
-    // userId — every client (including the actor) applies the server state.
-    if (boardData.userId && boardData.userId === getUserId()) {
+    // Sandbox-mode edits are broadcast with the editing TAB's id so that tab
+    // can skip its own echo. Authoritative /api/game broadcasts carry no tabId
+    // — every client (including the actor) applies the server state. Neither
+    // does a sandbox update the server had to sanitize: the tab that sent it is
+    // the one holding stale pieces, so it needs the corrected board most.
+    if (boardData.tabId && boardData.tabId === getTabId()) {
         console.log("Received a Pusher piece move event, but we initiated it, so ignoring it");
         return;
     }

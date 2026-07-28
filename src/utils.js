@@ -52,13 +52,21 @@ export async function apiPost(endpoint, body = {}) {
 
 // Returns this browser's unique ID (or generates a new one if they don't have it already)
 export function getUserId() {
-    let id = localStorage.getItem('userId');   
+    let id = localStorage.getItem('userId');
     if (!id) {
         id = crypto.randomUUID();
         localStorage.setItem('userId', id);
     }
     return id;
 }
+
+// A per-TAB id, regenerated on every page load. userId lives in localStorage,
+// so every tab of the same browser shares it — and skipping board broadcasts
+// "we sent ourselves" by userId meant a second tab also skipped its sibling's
+// updates, including Reset Board. It then sat on a board full of pieces the
+// server had deleted and posted them back on its next action.
+const tabId = crypto.randomUUID();
+export const getTabId = () => tabId;
 
 // =============================================================================
 // SOUND EFFECTS
